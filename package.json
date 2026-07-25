@@ -1,0 +1,24 @@
+{
+  "name": "dotagent-hooks",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "npm run typecheck && npm run format:check",
+    "format": "prettier --write \"pre/**/*.ts\" \"lib/**/*.ts\" \"types/**/*.d.ts\"",
+    "format:check": "prettier --check \"pre/**/*.ts\" \"lib/**/*.ts\" \"types/**/*.d.ts\"",
+    "test": "node --test test/*.test.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "dependencies": {
+    "tree-sitter-bash": "0.25.1",
+    "web-tree-sitter": "0.26.11"
+  },
+  "devDependencies": {
+    "prettier": "3.6.2",
+    "typescript": "5.9.3"
+  }
+}
