@@ -1,51 +1,141 @@
 # dotagent-hooks
 
-`dotagent-hooks` contains hooks that stop AI coding agents from running destructive or policy-violating commands.
+`dotagent-hooks` provides an [Oh My Pi](https://github.com/can1357/oh-my-pi) hook that stops AI coding agents from running destructive or policy-violating commands.
 
-The current hook:
+## Command policy
+
+The hook:
 
 - blocks destructive shell and Git commands, including `git push`;
 - allows `git add`, `git stage`, and commits with valid messages;
 - requires commit subjects in the form `<type>[optional scope]: <description>`;
 - limits an optional commit body to two lines; and
-- tells the user what a blocked command does and how to run it personally.
+- explains what a blocked command does and gives the user the exact command to run personally.
 
-The hook is written for [Oh My Pi](https://github.com/can1357/oh-my-pi).
+## Requirements
 
-## Install from your fork
+- OMP 16.4.5 or newer
+- Node.js 22.18 or newer with `npm`
 
-Fork this repository if you plan to add hooks or change the policy. Your fork becomes the source for `~/.agents/hooks`.
+Check both versions before installing:
 
-Replace `YOUR_GITHUB_USER` below with your GitHub username:
+```sh
+omp --version
+node --version
+```
+
+Run `omp update` if OMP is older than 16.4.5.
+
+### Why OMP 16.4.5 is required
+
+OMP 16.4.3 and 16.4.4 discover the hook but fail while importing it in compiled binaries. The bundled `header-generator` dependency tries to read data files from the build machine's path, so OMP never registers the `tool_call` guard and the command policy is not enforced.
+
+[Issue #5178](https://github.com/can1357/oh-my-pi/issues/5178) tracks the failure. [PR #5180](https://github.com/can1357/oh-my-pi/pull/5180) contains the runtime fix shipped in OMP 16.4.5.
+
+## Install
+
+Choose the source you intend to maintain:
+
+- **Follow this repository** if you want the published policy without local changes.
+- **Install from your fork** if you plan to add hooks or change the policy.
+
+The commands below expect `~/.agents/hooks` and `~/.omp/agent/hooks` not to exist. If this repository is already installed, use [Update an existing installation](#update-an-existing-installation). If only the OMP hook path exists, inspect it before continuing:
+
+```sh
+readlink ~/.omp/agent/hooks
+```
+
+Do not replace an existing directory or symlink until you know what it contains.
+
+### Follow this repository
 
 ```sh
 mkdir -p ~/.agents
-git -C ~/.agents clone git@github.com:YOUR_GITHUB_USER/dotagent-hooks.git hooks
+git -C ~/.agents clone git@github.com:lunatech/dotagent-hooks.git hooks
+npm --prefix ~/.agents/hooks install --omit=dev
 mkdir -p ~/.omp/agent
 ln -s ../../.agents/hooks ~/.omp/agent/hooks
 ```
 
-The clone command creates this layout:
+### Install from your fork
 
-```text
-~/.agents/hooks/
-├── LICENSE
-├── README.md
-└── pre/
-    └── command-safety.ts
+Fork this repository, replace `YOUR_GITHUB_USER` below with your GitHub username, and run:
+
+```sh
+mkdir -p ~/.agents
+git -C ~/.agents clone git@github.com:YOUR_GITHUB_USER/dotagent-hooks.git hooks
+npm --prefix ~/.agents/hooks install
+mkdir -p ~/.omp/agent
+ln -s ../../.agents/hooks ~/.omp/agent/hooks
+git -C ~/.agents/hooks config core.hooksPath .githooks
 ```
 
-The symlink exposes the repository at OMP's user-level hook path:
+### How installation works
+
+The repository lives at `~/.agents/hooks`. `npm install` supplies the pinned Tree-sitter runtime and Bash grammar used by the hook; without those packages, OMP reports a load failure and does not enforce the policy.
+
+The symlink exposes the repository at OMP's default-profile hook path:
 
 ```text
 ~/.omp/agent/hooks -> ../../.agents/hooks
 ```
 
-Start a new OMP session after installing or changing a hook.
+Exit OMP and launch a new OMP process after installation. OMP discovers hooks during process startup; opening another conversation in an existing process does not reload them.
 
-### Add another hook
+## Named OMP profiles
 
-Add the hook under `~/.agents/hooks/pre`, then commit it to your fork:
+Named profiles do not load the default-profile symlink. Link the repository into every profile that should enforce the policy:
+
+```sh
+PROFILE=work
+mkdir -p ~/.omp/profiles/"$PROFILE"/agent
+ln -s ../../../../.agents/hooks ~/.omp/profiles/"$PROFILE"/agent/hooks
+```
+
+Replace `work` with the profile name, then exit and relaunch that profile's OMP process.
+
+## Update an existing installation
+
+To follow the published repository:
+
+```sh
+git -C ~/.agents/hooks pull --ff-only
+npm --prefix ~/.agents/hooks install --omit=dev
+```
+
+If you maintain a fork and need the development tools:
+
+```sh
+git -C ~/.agents/hooks pull --ff-only
+npm --prefix ~/.agents/hooks install
+```
+
+`git pull --ff-only` updates the checkout without creating a merge commit. Re-running `npm install` keeps the installed parser versions aligned with `package-lock.json`.
+
+Exit OMP and launch a new process after every update so it loads the current hook.
+
+## Develop the policy
+
+Add hook factories under `pre/`. Every policy addition or behavior change must include an observable regression case in `test/command-safety.test.mjs`.
+
+Run the full local verification before committing:
+
+```sh
+npm --prefix ~/.agents/hooks run check
+npm --prefix ~/.agents/hooks test
+```
+
+`npm run check` performs strict TypeScript and formatting checks. `npm test` exercises the command policy and OMP hook registration through the public API. GitHub Actions runs the same checks on Ubuntu and macOS.
+
+This repository tracks a pre-commit hook that runs `npm run check`. Enable it once per clone:
+
+```sh
+git -C ~/.agents/hooks config core.hooksPath .githooks
+```
+
+The Git hook runs before `git commit`; it does not run before `git push`. The OMP command-safety hook enforces the push policy for agent-issued shell commands after OMP loads it.
+
+To add and commit another hook:
 
 ```sh
 git -C ~/.agents/hooks add pre/your-hook.ts
@@ -53,41 +143,6 @@ git -C ~/.agents/hooks commit -m 'feat: add your hook'
 ```
 
 Push the commit yourself when you are ready to publish it.
-
-## Follow this repository
-
-Use this option if you want the hooks as published here and do not plan to maintain your own versions:
-
-```sh
-mkdir -p ~/.agents
-git -C ~/.agents clone git@github.com:lunatech/dotagent-hooks.git hooks
-mkdir -p ~/.omp/agent
-ln -s ../../.agents/hooks ~/.omp/agent/hooks
-```
-
-To receive later changes:
-
-```sh
-git -C ~/.agents/hooks pull --ff-only
-```
-
-Run the pull command periodically, then start a new OMP session. `git update` is not a standard Git command; `git pull --ff-only` fetches new commits and updates the local checkout without creating a merge commit.
-
-## Existing installations
-
-The clone commands expect `~/.agents/hooks` not to exist. If it already contains this repository, update it instead:
-
-```sh
-git -C ~/.agents/hooks pull --ff-only
-```
-
-If `~/.omp/agent/hooks` already exists, inspect it before creating the symlink:
-
-```sh
-readlink ~/.omp/agent/hooks
-```
-
-Do not replace an existing directory or symlink until you know what it contains.
 
 ## License
 
