@@ -13,6 +13,7 @@ The shell parser adapter lives in `lib/shell-ast.ts`. It uses the WASM build of 
 - Preserve the advisory contract: explain the effect, show the working directory, and give the user the exact command to run personally.
 - Do not weaken the prohibition on `git push` or destructive Git operations.
 - Update `README.md` when installation steps, dependencies, supported profiles, or user-visible policy behavior changes.
+- Whenever a blocked command is added or changed, update the blocked-command list in `README.md` in the same change.
 
 ## Tests
 
