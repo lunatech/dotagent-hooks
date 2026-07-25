@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import commandSafetyHook, { evaluateCommandPolicy } from "../pre/command-safety.ts";
 
-async function assertBlocked(command, kind = "destructive") {
-  const result = await evaluateCommandPolicy(command, "/tmp/repo");
+const EMPTY_ALLOWED_COMMANDS_PATH = "/dev/null";
+
+async function assertBlocked(command, kind = "destructive", allowedCommandsPath = EMPTY_ALLOWED_COMMANDS_PATH) {
+  const result = await evaluateCommandPolicy(command, "/tmp/repo", allowedCommandsPath);
   assert.equal(result?.kind, kind, command);
   if (kind === "destructive") {
     assert.match(result.reason, /What it does:/);
@@ -12,8 +17,8 @@ async function assertBlocked(command, kind = "destructive") {
   }
 }
 
-async function assertAllowed(command) {
-  assert.equal(await evaluateCommandPolicy(command, "/tmp/repo"), null, command);
+async function assertAllowed(command, allowedCommandsPath = EMPTY_ALLOWED_COMMANDS_PATH) {
+  assert.equal(await evaluateCommandPolicy(command, "/tmp/repo", allowedCommandsPath), null, command);
 }
 
 test("blocks destructive commands in compound shell syntax", async () => {
@@ -28,6 +33,26 @@ test("unwraps qualified wrappers and wrapper assignments", async () => {
   await assertBlocked("sudo env rm target");
   await assertBlocked("command env FOO=bar rm target");
   await assertAllowed("command -v rm");
+});
+
+test("allows configured commands only for the non-sudo user", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "dotagent-hooks-"));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  const allowedCommandsPath = join(directory, "user-allowed-commands");
+  await writeFile(allowedCommandsPath, "# One executable per line\npkill\nfind\ngit\nsudo\nxargs\n");
+
+  await assertAllowed("pkill -f worker", allowedCommandsPath);
+  await assertAllowed("/usr/bin/pkill -f worker", allowedCommandsPath);
+  await assertAllowed("find . -delete", allowedCommandsPath);
+  await assertBlocked("killall worker", "destructive", allowedCommandsPath);
+  await assertBlocked("sudo pkill -f worker", "destructive", allowedCommandsPath);
+  await assertBlocked("sudo echo ok", "destructive", allowedCommandsPath);
+  await assertBlocked("git push origin main", "destructive", allowedCommandsPath);
+  await assertBlocked("xargs rm", "destructive", allowedCommandsPath);
+  await assertBlocked("find . -exec rm '{}' ';'", "destructive", allowedCommandsPath);
+  await writeFile(allowedCommandsPath, "killall\n");
+  await assertBlocked("pkill -f worker", "destructive", allowedCommandsPath);
+  await assertAllowed("killall worker", allowedCommandsPath);
 });
 
 test("inspects nested shell commands after option terminators", async () => {

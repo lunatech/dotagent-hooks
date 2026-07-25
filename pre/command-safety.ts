@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import type { HookAPI } from "@oh-my-pi/pi-coding-agent/extensibility/hooks";
 import { parseShellAst, type ShellWord } from "../lib/shell-ast.ts";
 
@@ -15,6 +16,7 @@ type GitCommand = {
 type UnwrappedCommand = {
   words: ShellWord[];
   error?: string;
+  usesSudo?: boolean;
 };
 
 type NestedShell = {
@@ -44,6 +46,8 @@ const DESTRUCTIVE_EXECUTABLES: Record<string, string> = {
   reboot: "restarts the operating system",
   shutdown: "stops or restarts the operating system",
 };
+const USER_ALLOWED_COMMANDS_PATH = new URL("../user-allowed-commands", import.meta.url);
+const EXECUTABLE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._+-]*$/;
 
 function executableName(value: string | undefined): string {
   return (value ?? "").split("/").pop() ?? "";
@@ -54,6 +58,7 @@ function isAssignment(word: ShellWord): boolean {
 }
 
 function unwrapCommand(input: ShellWord[]): UnwrappedCommand {
+  let usesSudo = false;
   let words = input;
   while (words.length > 0) {
     while (words.length > 0 && isAssignment(words[0])) words = words.slice(1);
@@ -82,6 +87,7 @@ function unwrapCommand(input: ShellWord[]): UnwrappedCommand {
 
     if (!Object.hasOwn(SHELL_WRAPPERS, executable)) break;
     const wrapper = executable;
+    if (wrapper === "sudo") usesSudo = true;
     let index = 1;
     while (index < words.length && words[index].text.startsWith("-")) {
       const option = words[index];
@@ -104,7 +110,7 @@ function unwrapCommand(input: ShellWord[]): UnwrappedCommand {
     }
     words = words.slice(index);
   }
-  return { words };
+  return { words, usesSudo };
 }
 
 function gitSubcommand(words: ShellWord[]): GitCommand {
@@ -198,6 +204,44 @@ function destructiveExplanation(command: ShellWord[]): string | null {
   if (executable === "xargs")
     return "constructs and invokes commands from standard input, so their destructive effects cannot be verified safely";
   return null;
+}
+
+function isUserAllowableDestructiveCommand(command: ShellWord[]): boolean {
+  const executable = executableName(command[0]?.text);
+  if (Object.hasOwn(DESTRUCTIVE_EXECUTABLES, executable) || /^mkfs(?:\.|$)/.test(executable)) return true;
+
+  const controls = command.slice(1);
+  if (controls.some((word) => word.dynamic)) return false;
+  const args = controls.map((word) => word.text);
+
+  if (executable === "dd") return args.some((argument) => argument.startsWith("of="));
+  if (executable === "diskutil") return args.some((argument) => /^(?:erase|partition|delete|remove)/i.test(argument));
+  if (executable === "terraform") return args[0] === "destroy";
+  if (executable === "kubectl") return args[0] === "delete";
+  if (executable === "docker")
+    return (
+      args[0] === "rm" ||
+      args[0] === "rmi" ||
+      (args[0] === "system" && args[1] === "prune") ||
+      (args[1] === "rm" && ["container", "image", "network", "volume"].includes(args[0]))
+    );
+  if (["npm", "pnpm", "yarn", "pip", "pip3", "brew", "gem", "cargo"].includes(executable))
+    return ["remove", "rm", "uninstall", "uninstall-global"].includes(args[0]);
+  return executable === "find" && args.includes("-delete") && !args.some((argument) => argument === "-exec" || argument === "-execdir");
+}
+
+async function readUserAllowedCommands(path: string | URL): Promise<ReadonlySet<string>> {
+  try {
+    const contents = await readFile(path, "utf8");
+    return new Set(
+      contents
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line !== "" && !line.startsWith("#") && EXECUTABLE_NAME_PATTERN.test(line)),
+    );
+  } catch {
+    return new Set();
+  }
 }
 
 function destructiveGitExplanation(git: GitCommand): string | null {
@@ -342,7 +386,12 @@ function nestedShellCommand(words: ShellWord[]): NestedShell {
   return {};
 }
 
-export async function evaluateCommandPolicy(command: string, cwd = "."): Promise<PolicyDecision | null> {
+async function evaluateCommandPolicyWithAllowedCommands(
+  command: string,
+  cwd: string,
+  allowedCommands: ReadonlySet<string>,
+  allowUserOverrides = true,
+): Promise<PolicyDecision | null> {
   const ast = await parseShellAst(command);
   if (ast.error)
     return { kind: "destructive", reason: destructiveAdvisory(command, cwd, `cannot parse the shell syntax safely (${ast.error})`) };
@@ -360,6 +409,11 @@ export async function evaluateCommandPolicy(command: string, cwd = "."): Promise
   for (const parsedCommand of ast.commands) {
     const unwrapped = unwrapCommand(parsedCommand.words);
     if (unwrapped.error) return { kind: "destructive", reason: destructiveAdvisory(command, cwd, unwrapped.error) };
+    if (unwrapped.usesSudo)
+      return {
+        kind: "destructive",
+        reason: destructiveAdvisory(command, cwd, "runs a command with elevated privileges through sudo"),
+      };
     const words = unwrapped.words;
     if (words.length === 0) continue;
     if (words[0].dynamic)
@@ -380,7 +434,12 @@ export async function evaluateCommandPolicy(command: string, cwd = "."): Promise
           kind: "destructive",
           reason: destructiveAdvisory(command, cwd, "constructs nested shell code dynamically, so its effects cannot be verified safely"),
         };
-      const nestedDecision = await evaluateCommandPolicy(nested.command.text, cwd);
+      const nestedDecision = await evaluateCommandPolicyWithAllowedCommands(
+        nested.command.text,
+        cwd,
+        allowedCommands,
+        allowUserOverrides && !unwrapped.usesSudo,
+      );
       if (nestedDecision?.kind === "destructive")
         return {
           kind: "destructive",
@@ -390,8 +449,11 @@ export async function evaluateCommandPolicy(command: string, cwd = "."): Promise
     }
 
     const explanation = destructiveExplanation(words);
-    if (explanation) return { kind: "destructive", reason: destructiveAdvisory(command, cwd, explanation) };
-    if (executableName(words[0].text) !== "git") continue;
+    const executable = executableName(words[0].text);
+    const isAllowedForUser =
+      allowUserOverrides && !unwrapped.usesSudo && allowedCommands.has(executable) && isUserAllowableDestructiveCommand(words);
+    if (explanation && !isAllowedForUser) return { kind: "destructive", reason: destructiveAdvisory(command, cwd, explanation) };
+    if (executable !== "git") continue;
 
     const git = gitSubcommand(words);
     if (git.error) return { kind: "destructive", reason: destructiveAdvisory(command, cwd, git.error) };
@@ -404,6 +466,15 @@ export async function evaluateCommandPolicy(command: string, cwd = "."): Promise
     }
   }
   return null;
+}
+
+export async function evaluateCommandPolicy(
+  command: string,
+  cwd = ".",
+  allowedCommandsPath: string | URL = USER_ALLOWED_COMMANDS_PATH,
+): Promise<PolicyDecision | null> {
+  const allowedCommands = await readUserAllowedCommands(allowedCommandsPath);
+  return evaluateCommandPolicyWithAllowedCommands(command, cwd, allowedCommands);
 }
 
 export default function commandSafetyHook(pi: HookAPI): void {

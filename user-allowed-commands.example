@@ -1,0 +1,41 @@
+# Uncomment only the executables the agent may run destructively as
+# your user account.
+# Arguments are not supported; each enabled line must contain one executable name.
+
+# File removal or replacement
+# rm
+# rmdir
+# unlink
+# shred
+# truncate
+# mv
+
+# Process and system control
+# kill
+# killall
+# pkill
+# halt
+# poweroff
+# reboot
+# shutdown
+
+# Disk and resource operations
+# mkfs
+# dd
+# diskutil
+# terraform
+# kubectl
+# docker
+
+# Package removal
+# npm
+# pnpm
+# yarn
+# pip
+# pip3
+# brew
+# gem
+# cargo
+
+# Path deletion only; find -exec and find -execdir remain blocked
+# find
