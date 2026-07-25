@@ -1,0 +1,43 @@
+# Uncomment only the executables the agent may run destructively as
+# your user account.
+# Arguments are not supported; each enabled line must contain one executable name.
+
+# File removal or replacement
+# rm
+# rmdir
+# unlink
+# shred
+# truncate
+# mv
+
+# Process and system control
+# kill
+# killall
+# pkill
+# halt
+# poweroff
+# reboot
+# shutdown
+
+# Disk and resource operations
+# mkfs
+# dd
+# diskutil
+# terraform
+# kubectl
+# docker
+
+# Package removal: remove, rm, uninstall, and uninstall-global operations
+# are blocked by default. Uncommenting a manager permits those operations.
+# npm
+# pnpm
+# yarn
+# pip
+# pip3
+# brew
+# gem
+# cargo
+
+# Path deletion: uncommenting find permits find -delete only.
+# find -exec and find -execdir remain blocked because they run other commands.
+# find

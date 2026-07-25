@@ -4,13 +4,43 @@
 
 ## Command policy
 
-The hook:
+The hook blocks these commands and shell behaviors by default:
 
-- blocks destructive shell and Git commands, including `git push`;
-- allows `git add`, `git stage`, and commits with valid messages;
-- requires commit subjects in the form `<type>[optional scope]: <description>`;
-- limits an optional commit body to two lines; and
-- explains what a blocked command does and gives the user the exact command to run personally.
+- every command invoked through `sudo`;
+- file removal or replacement: `rm`, `rmdir`, `unlink`, `shred`, `truncate`, and `mv`;
+- process and system control: `kill`, `killall`, `pkill`, `halt`, `poweroff`, `reboot`, and `shutdown`;
+- disk writes: `mkfs*`, `dd` with an `of=` target, and destructive `diskutil` operations;
+- resource deletion: `terraform destroy`, `kubectl delete`, Docker `rm`, `rmi`, and prune operations;
+- package removal through `npm`, `pnpm`, `yarn`, `pip`, `pip3`, `brew`, `gem`, or `cargo`;
+- `find -delete`, `find -exec`, `find -execdir`, and `xargs`;
+- Git operations that publish, delete, or discard work: `push`, `clean`, `rm`, destructive `reset`, `restore`, `checkout`, forced `switch`, branch or tag deletion, and `stash drop` or `stash clear`;
+- shell output redirection, command or process substitution, malformed syntax, dynamic executable names, and dynamic policy-control arguments.
+
+The hook also requires Git commit subjects in the form `<type>[optional scope]: <description>` and limits an optional commit body to two lines. A blocked-command advisory explains the effect, shows the working directory, identifies the local opt-in file for supported non-sudo executables, and gives the user the exact command to run personally. It also states that opt-in cannot override `sudo`, destructive Git operations, or shell behavior whose effects cannot be inspected safely.
+
+### User-allowed commands
+
+The optional `user-allowed-commands` file lives in the repository root beside `user-allowed-commands.example`. It is ignored by Git, so each checkout can keep its own policy without modifying tracked files.
+
+Create it from the example:
+
+```sh
+cp user-allowed-commands.example user-allowed-commands
+```
+
+The example lists every configurable executable with each entry commented out. Remove the leading `#` only from executables the agent may run destructively as the current user:
+
+```text
+# kill
+# killall
+pkill
+```
+
+Put one executable name on each enabled line. Blank lines and lines beginning with `#` are ignored. Entries match the executable name, so `pkill` also permits `/usr/bin/pkill`. Do not include arguments. The hook reads the local file for every command, so edits apply immediately.
+
+The file cannot permit `sudo`, destructive Git operations, output redirection, command or process substitution, malformed or dynamic syntax, `xargs`, or `find -exec`/`-execdir`. For example, listing `pkill` permits `pkill -f worker` but `sudo pkill -f worker` remains blocked.
+
+For the standard installation, the local file is `~/.agents/hooks/user-allowed-commands`. Named OMP profiles linked to the same checkout share it.
 
 ## Requirements
 
@@ -52,6 +82,7 @@ Do not replace an existing directory or symlink until you know what it contains.
 ```sh
 mkdir -p ~/.agents
 git -C ~/.agents clone git@github.com:lunatech/dotagent-hooks.git hooks
+cp ~/.agents/hooks/user-allowed-commands.example ~/.agents/hooks/user-allowed-commands
 npm --prefix ~/.agents/hooks install --omit=dev
 mkdir -p ~/.omp/agent
 ln -s ../../.agents/hooks ~/.omp/agent/hooks
@@ -64,6 +95,7 @@ Fork this repository, replace `YOUR_GITHUB_USER` below with your GitHub username
 ```sh
 mkdir -p ~/.agents
 git -C ~/.agents clone git@github.com:YOUR_GITHUB_USER/dotagent-hooks.git hooks
+cp ~/.agents/hooks/user-allowed-commands.example ~/.agents/hooks/user-allowed-commands
 npm --prefix ~/.agents/hooks install
 mkdir -p ~/.omp/agent
 ln -s ../../.agents/hooks ~/.omp/agent/hooks
