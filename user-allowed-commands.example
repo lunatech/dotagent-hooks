@@ -27,7 +27,8 @@
 # kubectl
 # docker
 
-# Package removal
+# Package removal: remove, rm, uninstall, and uninstall-global operations
+# are blocked by default. Uncommenting a manager permits those operations.
 # npm
 # pnpm
 # yarn
@@ -37,5 +38,6 @@
 # gem
 # cargo
 
-# Path deletion only; find -exec and find -execdir remain blocked
+# Path deletion: uncommenting find permits find -delete only.
+# find -exec and find -execdir remain blocked because they run other commands.
 # find
