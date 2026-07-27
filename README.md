@@ -4,7 +4,7 @@
 
 ## Command policy
 
-The hook blocks these commands and shell behaviors by default:
+The hooks block these commands and shell behaviors by default:
 
 - every command invoked through `sudo`;
 - file removal or replacement: `rm`, `rmdir`, `unlink`, `shred`, `truncate`, and `mv`;
@@ -14,9 +14,19 @@ The hook blocks these commands and shell behaviors by default:
 - package removal through `npm`, `pnpm`, `yarn`, `pip`, `pip3`, `brew`, `gem`, or `cargo`;
 - `find -delete`, `find -exec`, `find -execdir`, and `xargs`;
 - Git operations that publish, delete, or discard work: `push`, `clean`, `rm`, destructive `reset`, `restore`, `checkout`, forced `switch`, branch or tag deletion, and `stash drop` or `stash clear`;
-- shell output redirection, command or process substitution, malformed syntax, dynamic executable names, and dynamic policy-control arguments.
+- shell output redirection, command or process substitution, malformed syntax, dynamic executable names, and dynamic policy-control arguments;
+- AWS CLI write/mutating operations: any `aws <service> <action>` where the action is not a read-only prefix (`describe`, `list`, `get`, `head`, `check`, `query`, `scan`, `search`, `validate`, `generate-presigned`, `help`, `wait`);
+- `curl` requests that mutate remote state: `-X POST/PUT/DELETE/PATCH`, `--request POST/PUT/DELETE/PATCH`, or any `--data`/`-d` flag;
+- `gcx` CLI operations that mutate live Grafana Cloud state: write verbs such as `create`, `update`, `delete`, `push`, `apply`, `set`, `reset`, and others; unrecognised verbs are blocked conservatively;
+- `kubectl` write operations: `apply`, `create`, `delete`, `replace`, `patch`, `edit`, `scale`, `drain`, `cordon`, `uncordon`, `taint`, `annotate`, `label`, `exec`, `cp`, and destructive `rollout` sub-commands (`restart`, `undo`, `pause`, `resume`);
+- package installs that modify environments silently: `pip`/`pip3 install`, `uv add`, `npm install`/`npm i`, and `brew install`;
+- `gh pr comment` and `gh pr review`: both post to or modify the PR discussion thread. All other `gh pr` operations (`edit`, `merge`, `close`, `view`, `list`, etc.) are allowed through.
 
-The hook also requires Git commit subjects in the form `<type>[optional scope]: <description>` and limits an optional commit body to two lines. A blocked-command advisory explains the effect, shows the working directory, identifies the local opt-in file for supported non-sudo executables, and gives the user the exact command to run personally. It also states that opt-in cannot override `sudo`, destructive Git operations, or shell behavior whose effects cannot be inspected safely.
+The commit-safety hook also requires Git commit subjects in the form `<type>[optional scope]: <description>` and limits an optional commit body to two lines. A blocked-command advisory explains the effect, shows the working directory, identifies the local opt-in file for supported non-sudo executables, and gives the user the exact command to run personally. It also states that opt-in cannot override `sudo`, destructive Git operations, or shell behavior whose effects cannot be inspected safely.
+
+The `ask-mode` hook provides a `/ask` slash command that restricts the agent to `read` and `web_search` only. Toggle with `/ask`, `/ask off`, and `/ask status`, or start with `OMP_ASK_MODE=1`.
+
+When a Python command fails with a `ModuleNotFoundError` or `ImportError`, the `guard-pkg-install` hook appends `uv`/`uvx` guidance to the output without blocking the result.
 
 ### User-allowed commands
 
