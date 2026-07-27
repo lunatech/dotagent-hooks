@@ -135,6 +135,24 @@ test("guard-gcx-write allows read-only verbs", async () => {
   await assertAllowed(guardGcxWrite, "bash", "gcx metrics query --expr 'up'");
 });
 
+test("guard-gcx-write does not false-positive on gcx tokens in echo arguments", async () => {
+  // With regex this blocked because \bgcx\b matched inside the echo string.
+  // With AST the executable is echo, not gcx — must pass.
+  await assertAllowed(guardGcxWrite, "bash", "echo 'gcx delete foo'");
+  await assertAllowed(guardGcxWrite, "bash", 'echo "gcx dashboards create --title test"');
+});
+
+test("guard-gcx-write blocks dynamic token in verb position", async () => {
+  // $ACTION is dynamic — exact verb unknown, must block with precise message.
+  const result = await assertBlocked(guardGcxWrite, "bash", "gcx dashboards $ACTION --id 1");
+  assert.match(result.reason, /dynamic token/);
+});
+
+test("guard-gcx-write allows gcx api with read-only method", async () => {
+  await assertAllowed(guardGcxWrite, "bash", "gcx api -X GET /api/v1/dashboards");
+  await assertAllowed(guardGcxWrite, "bash", "gcx api /api/v1/dashboards");
+});
+
 // ---------------------------------------------------------------------------
 // guard-kubectl-write
 // ---------------------------------------------------------------------------

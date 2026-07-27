@@ -2,10 +2,19 @@
 //
 // Blocks gcx CLI operations that mutate live Grafana Cloud state.
 //
-// Strategy: walk the non-flag tokens left-to-right, skipping known
-// group/sub-group namespace tokens, and return the first token that
-// is a known verb. Block if it is a write verb; pass if it is a
-// read verb; block conservatively if it is unknown.
+// Strategy: parse the shell command with the Tree-sitter AST (same parser
+// as command-safety.ts) so that gcx tokens inside quoted strings or echo
+// arguments are not mistaken for real commands. Walk the AST words
+// left-to-right, skipping flags and known group/namespace tokens, and
+// classify the first word that is a known verb. Block if it is a write
+// verb; pass if it is a read verb; block conservatively if it is unknown.
+// Dynamic tokens (shell variables, command substitutions) are blocked with
+// a precise "cannot verify" message rather than a misleading "unrecognised
+// verb" message.
+//
+// Special case — `gcx api`:
+//   Block if an explicit write method (-X POST/PUT/DELETE/PATCH,
+//   --request …, --data / -d) is present. All other gcx api calls pass.
 //
 // Read-only verbs allowed through (not exhaustive — anything genuinely
 // new will be conservatively blocked until added here):
@@ -18,6 +27,11 @@
 //
 
 import type { HookAPI } from "@oh-my-pi/pi-coding-agent/extensibility/hooks";
+import { parseShellAst, type ShellWord } from "../lib/shell-ast.ts";
+
+// ---------------------------------------------------------------------------
+// Verb tables
+// ---------------------------------------------------------------------------
 
 // Read-only terminal verbs — safe to run without confirmation.
 const GCX_READONLY_VERBS: Record<string, true> = {
@@ -208,78 +222,134 @@ const GCX_GROUPS: Record<string, true> = {
   runs: true, // k6 runs — child verb does the work
 };
 
-// gcx api with an explicit write method or request body
-const GCX_API_WRITE_METHOD = /\bgcx\s+api\b.*(-X\s*(POST|PUT|DELETE|PATCH)|--request\s+(POST|PUT|DELETE|PATCH))/i;
-const GCX_API_DATA = /\bgcx\s+api\b.*(\s-d\s|\s--data\b)/;
+// ---------------------------------------------------------------------------
+// AST-based helpers
+// ---------------------------------------------------------------------------
 
-// Captures all non-flag tokens after `gcx`
-const GCX_TOKENS = /\bgcx\s+((?:[^-\s]\S*\s*)+)/;
-
-function extractVerb(cmd: string): string | null {
-  const m = cmd.match(GCX_TOKENS);
-  if (!m) return null;
-  const tokens = m[1]
-    .trim()
-    .split(/\s+/)
-    .filter((t) => t && !t.startsWith("-"));
-
-  for (const t of tokens) {
-    // Known verb — return immediately
-    if (GCX_WRITE_VERBS[t] !== undefined || GCX_READONLY_VERBS[t] !== undefined) return t;
-    // Known routing namespace — keep walking
-    if (GCX_GROUPS[t] !== undefined) continue;
-    // Positional arg: path fragment, UUID, digit-prefixed, or quoted string
-    if (/[\/=]/.test(t) || /^\d/.test(t) || /^[a-f0-9]{8}-/.test(t)) continue;
-    if (t.startsWith("'") || t.startsWith('"')) continue;
-    // Unknown bare word — treat conservatively as the verb
-    return t;
+// Classify the gcx api call by the HTTP method / data flag present.
+// Returns "method" if a write HTTP method is detected, "data" if a request
+// body flag is detected, or null if the call looks read-only.
+// Dynamic flags (shell expansions) are treated conservatively as write.
+function gcxApiWriteKind(words: ShellWord[]): "method" | "data" | null {
+  // words[0]="gcx", words[1]="api"; start from index 2
+  for (let i = 2; i < words.length; i++) {
+    const w = words[i];
+    if (w.dynamic) return "method"; // can't verify — block conservatively
+    const t = w.text;
+    // -X <METHOD> or --request <METHOD>
+    if (t === "-X" || t === "--request") {
+      const method = (words[i + 1]?.text ?? "").toUpperCase();
+      i++; // consume the value word in either case
+      if (["POST", "PUT", "DELETE", "PATCH"].includes(method)) return "method";
+      continue;
+    }
+    // --request=METHOD
+    if (/^--request=(POST|PUT|DELETE|PATCH)$/i.test(t)) return "method";
+    // -d / --data / --data-raw / --data-binary (with or without = value)
+    if (t === "-d" || t === "--data" || t === "--data-raw" || t === "--data-binary") return "data";
+    if (/^(?:--data|--data-raw|--data-binary)=/.test(t)) return "data";
   }
-  // Only groups/args found — null means pass through (e.g. bare group listings)
   return null;
 }
 
+type VerbResult = { kind: "write" | "readonly" | "unknown"; verb: string } | { kind: "dynamic" } | { kind: "none" };
+
+// Walk the words of a gcx command (words[0] is "gcx") to find the first
+// token that acts as a verb. Flags and group/namespace tokens are skipped.
+// Dynamic tokens are surfaced immediately so the caller can emit a precise
+// "cannot verify" message.
+function extractGcxVerb(words: ShellWord[]): VerbResult {
+  for (let i = 1; i < words.length; i++) {
+    const word = words[i];
+    // Flags and their attached values are never the verb
+    if (word.text.startsWith("-")) continue;
+    // A dynamic token in verb position cannot be verified
+    if (word.dynamic) return { kind: "dynamic" };
+    const t = word.text;
+    if (GCX_WRITE_VERBS[t] !== undefined) return { kind: "write", verb: t };
+    if (GCX_READONLY_VERBS[t] !== undefined) return { kind: "readonly", verb: t };
+    if (GCX_GROUPS[t] !== undefined) continue; // namespace — keep walking
+    // Positional arg: path fragment, UUID, digit-prefixed
+    if (/[/=]/.test(t) || /^\d/.test(t) || /^[a-f0-9]{8}-/.test(t)) continue;
+    // Unknown bare word — treat conservatively as the verb
+    return { kind: "unknown", verb: t };
+  }
+  return { kind: "none" };
+}
+
+// ---------------------------------------------------------------------------
+// Hook
+// ---------------------------------------------------------------------------
+
 export default function (pi: HookAPI) {
-  pi.on("tool_call", (event) => {
+  pi.on("tool_call", async (event) => {
     if (event.toolName !== "bash") return;
     const input = event.input as Record<string, unknown>;
     const cmd = typeof input.command === "string" ? input.command : "";
 
+    // Fast path: skip commands that don't mention gcx at all
     if (!/\bgcx\b/.test(cmd)) return;
 
-    if (GCX_API_WRITE_METHOD.test(cmd)) {
+    const ast = await parseShellAst(cmd);
+    if (ast.error) {
       return {
         block: true,
-        reason:
-          "Refused: gcx api with a write method (POST/PUT/DELETE/PATCH) mutates live Grafana state. " +
-          "Review the endpoint and run manually.",
+        reason: "Refused: cannot parse the shell syntax to verify the gcx operation safely. " + "Run manually after reviewing.",
       };
     }
 
-    if (GCX_API_DATA.test(cmd)) {
-      return {
-        block: true,
-        reason:
-          "Refused: gcx api with --data implies a POST to live Grafana state. " + "Review the endpoint and payload, then run manually.",
-      };
-    }
+    for (const { words } of ast.commands) {
+      if (words.length === 0) continue;
+      // Only inspect commands whose executable is literally "gcx"
+      if (words[0].dynamic || words[0].text !== "gcx") continue;
 
-    const verb = extractVerb(cmd);
-    if (!verb) return;
+      // --- gcx api: only HTTP method / data flags matter ---
+      if (!words[1]?.dynamic && words[1]?.text === "api") {
+        const kind = gcxApiWriteKind(words);
+        if (kind === "method") {
+          return {
+            block: true,
+            reason:
+              "Refused: gcx api with a write method (POST/PUT/DELETE/PATCH) mutates live Grafana state. " +
+              "Review the endpoint and run manually.",
+          };
+        }
+        if (kind === "data") {
+          return {
+            block: true,
+            reason:
+              "Refused: gcx api with --data implies a POST to live Grafana state. " + "Review the endpoint and payload, then run manually.",
+          };
+        }
+        continue; // read-only api call — allow
+      }
 
-    if (GCX_WRITE_VERBS[verb] !== undefined) {
-      return {
-        block: true,
-        reason: `Refused: gcx ... ${verb} modifies live Grafana Cloud state. ` + "Review the target and run manually.",
-      };
-    }
+      // --- all other gcx sub-commands: classify by verb ---
+      const result = extractGcxVerb(words);
 
-    if (GCX_READONLY_VERBS[verb] === undefined) {
-      return {
-        block: true,
-        reason:
-          `Refused: gcx ... ${verb} is an unrecognised verb — blocked conservatively. ` +
-          "If this is a read-only operation, run it manually.",
-      };
+      if (result.kind === "dynamic") {
+        return {
+          block: true,
+          reason: "Refused: gcx command uses a dynamic token in verb position — cannot verify the operation safely. " + "Run manually.",
+        };
+      }
+      if (result.kind === "none") continue;
+
+      if (result.kind === "write") {
+        return {
+          block: true,
+          reason: `Refused: gcx ... ${result.verb} modifies live Grafana Cloud state. ` + "Review the target and run manually.",
+        };
+      }
+      if (result.kind === "unknown") {
+        return {
+          block: true,
+          reason:
+            `Refused: gcx ... ${result.verb} is an unrecognised verb — blocked conservatively. ` +
+            "If this is a read-only operation, run it manually.",
+        };
+      }
+      // kind === "readonly" — allow
     }
   });
 }
