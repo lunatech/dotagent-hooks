@@ -12,6 +12,7 @@ import guardGcxWrite from "../pre/guard-gcx-write.ts";
 import guardKubectlWrite from "../pre/guard-kubectl-write.ts";
 import guardPkgInstall from "../pre/guard-pkg-install.ts";
 import askMode from "../pre/ask-mode.ts";
+import guardGhPrDiscussion from "../pre/guard-gh-pr-discussion.ts";
 
 // ---------------------------------------------------------------------------
 // Minimal mock HookAPI
@@ -291,4 +292,84 @@ test("ask-mode registers the /ask command", () => {
   process.env.OMP_ASK_MODE = "0";
   askMode(mock.pi);
   assert.ok("ask" in mock.commands, "/ask command must be registered");
+});
+
+// ---------------------------------------------------------------------------
+// AST false-positive prevention (regression for all refactored hooks)
+// ---------------------------------------------------------------------------
+
+test("guard-aws-write does not false-positive on aws tokens in echo arguments", async () => {
+  await assertAllowed(guardAwsWrite, "bash", "echo 'aws s3 rm s3://bucket/key'");
+  await assertAllowed(guardAwsWrite, "bash", 'echo "aws ec2 terminate-instances --instance-ids i-1"');
+});
+
+test("guard-aws-write blocks dynamic service or action token", async () => {
+  const result = await assertBlocked(guardAwsWrite, "bash", "aws $SVC $ACTION");
+  assert.match(result.reason, /dynamic token/);
+});
+
+test("guard-curl-write does not false-positive on curl tokens in echo arguments", async () => {
+  await assertAllowed(guardCurlWrite, "bash", "echo 'curl -X POST https://api.example.com'");
+  await assertAllowed(guardCurlWrite, "bash", 'echo "curl --data foo https://api.example.com"');
+});
+
+test("guard-kubectl-write does not false-positive on kubectl tokens in echo arguments", async () => {
+  await assertAllowed(guardKubectlWrite, "bash", "echo 'kubectl delete pod my-pod'");
+  await assertAllowed(guardKubectlWrite, "bash", 'echo "kubectl apply -f deployment.yaml"');
+});
+
+test("guard-kubectl-write blocks dynamic token in verb position", async () => {
+  const result = await assertBlocked(guardKubectlWrite, "bash", "kubectl $VERB pod my-pod");
+  assert.match(result.reason, /dynamic token/);
+});
+
+// ---------------------------------------------------------------------------
+// guard-gh-pr-discussion
+// ---------------------------------------------------------------------------
+
+test("guard-gh-pr-discussion blocks gh pr comment", async () => {
+  await assertBlocked(guardGhPrDiscussion, "bash", "gh pr comment 123 --body 'LGTM'");
+  await assertBlocked(guardGhPrDiscussion, "bash", "gh pr comment --edit-last");
+  await assertBlocked(guardGhPrDiscussion, "bash", "gh pr comment https://github.com/o/r/pull/1 -b 'nit'");
+});
+
+test("guard-gh-pr-discussion blocks gh pr review", async () => {
+  await assertBlocked(guardGhPrDiscussion, "bash", "gh pr review 123 --approve");
+  await assertBlocked(guardGhPrDiscussion, "bash", "gh pr review --request-changes -b 'needs work'");
+  await assertBlocked(guardGhPrDiscussion, "bash", "gh pr review 123 --comment -b 'see inline'");
+});
+
+test("guard-gh-pr-discussion blocks with -R flag before topic", async () => {
+  await assertBlocked(guardGhPrDiscussion, "bash", "gh -R owner/repo pr comment 123 --body 'test'");
+  await assertBlocked(guardGhPrDiscussion, "bash", "gh --repo owner/repo pr review 123 --approve");
+});
+
+test("guard-gh-pr-discussion allows gh pr edit and other pr operations", async () => {
+  await assertAllowed(guardGhPrDiscussion, "bash", "gh pr edit 123 --title 'new title'");
+  await assertAllowed(guardGhPrDiscussion, "bash", "gh pr view 123");
+  await assertAllowed(guardGhPrDiscussion, "bash", "gh pr list");
+  await assertAllowed(guardGhPrDiscussion, "bash", "gh pr merge 123 --squash");
+  await assertAllowed(guardGhPrDiscussion, "bash", "gh pr close 123");
+  await assertAllowed(guardGhPrDiscussion, "bash", "gh pr diff 123");
+  await assertAllowed(guardGhPrDiscussion, "bash", "gh pr checks 123");
+});
+
+test("guard-gh-pr-discussion allows non-pr gh commands", async () => {
+  await assertAllowed(guardGhPrDiscussion, "bash", "gh repo clone owner/repo");
+  await assertAllowed(guardGhPrDiscussion, "bash", "gh issue list");
+  await assertAllowed(guardGhPrDiscussion, "bash", "gh run list");
+});
+
+test("guard-gh-pr-discussion does not false-positive on gh tokens in echo arguments", async () => {
+  await assertAllowed(guardGhPrDiscussion, "bash", "echo 'gh pr comment 123 --body test'");
+  await assertAllowed(guardGhPrDiscussion, "bash", 'echo "gh pr review --approve"');
+});
+
+test("guard-gh-pr-discussion blocks dynamic token in topic or sub-command position", async () => {
+  const result = await assertBlocked(guardGhPrDiscussion, "bash", "gh pr $SUBCMD 123");
+  assert.match(result.reason, /dynamic token/);
+});
+
+test("guard-gh-pr-discussion ignores non-bash tools", async () => {
+  await assertAllowed(guardGhPrDiscussion, "read", "gh pr comment 123 --body 'test'");
 });

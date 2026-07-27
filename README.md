@@ -19,7 +19,8 @@ The hooks block these commands and shell behaviors by default:
 - `curl` requests that mutate remote state: `-X POST/PUT/DELETE/PATCH`, `--request POST/PUT/DELETE/PATCH`, or any `--data`/`-d` flag;
 - `gcx` CLI operations that mutate live Grafana Cloud state: write verbs such as `create`, `update`, `delete`, `push`, `apply`, `set`, `reset`, and others; unrecognised verbs are blocked conservatively;
 - `kubectl` write operations: `apply`, `create`, `delete`, `replace`, `patch`, `edit`, `scale`, `drain`, `cordon`, `uncordon`, `taint`, `annotate`, `label`, `exec`, `cp`, and destructive `rollout` sub-commands (`restart`, `undo`, `pause`, `resume`);
-- package installs that modify environments silently: `pip`/`pip3 install`, `uv add`, `npm install`/`npm i`, and `brew install`.
+- package installs that modify environments silently: `pip`/`pip3 install`, `uv add`, `npm install`/`npm i`, and `brew install`;
+- `gh pr comment` and `gh pr review`: both post to or modify the PR discussion thread. All other `gh pr` operations (`edit`, `merge`, `close`, `view`, `list`, etc.) are allowed through.
 
 The commit-safety hook also requires Git commit subjects in the form `<type>[optional scope]: <description>` and limits an optional commit body to two lines. A blocked-command advisory explains the effect, shows the working directory, identifies the local opt-in file for supported non-sudo executables, and gives the user the exact command to run personally. It also states that opt-in cannot override `sudo`, destructive Git operations, or shell behavior whose effects cannot be inspected safely.
 
