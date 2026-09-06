@@ -18,12 +18,22 @@
 import type { HookAPI } from "../lib/hook-api.ts";
 import { parseShellAst, type ShellWord } from "../lib/shell-ast.ts";
 
+function executableName(value: string): string {
+  return value.split("/").pop() ?? value;
+}
+
 // `gh pr` sub-commands that post to or modify the PR discussion thread.
 const PR_DISCUSSION_WRITE: Record<string, true> = { comment: true, review: true };
 
 // Flags that consume the next word as a value and may appear anywhere in
 // the command, including before the `pr` topic.
-const VALUE_FLAGS: Record<string, true> = { "-R": true, "--repo": true };
+const VALUE_FLAGS: Record<string, true> = {
+  "-R": true,
+  "--repo": true,
+  "--hostname": true,
+  "--config-dir": true,
+  "--insecure-storage": true,
+};
 
 type GhResult = { kind: "write"; verb: string } | { kind: "pass" } | { kind: "dynamic" };
 
@@ -85,7 +95,7 @@ export default function (pi: HookAPI) {
 
     for (const { words } of ast.commands) {
       if (words.length === 0) continue;
-      if (words[0].dynamic || words[0].text !== "gh") continue;
+      if (words[0].dynamic || executableName(words[0].text) !== "gh") continue;
 
       const result = classifyGhCommand(words);
 

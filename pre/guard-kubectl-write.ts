@@ -13,6 +13,10 @@
 import type { HookAPI } from "../lib/hook-api.ts";
 import { parseShellAst, type ShellWord } from "../lib/shell-ast.ts";
 
+function executableName(value: string): string {
+  return value.split("/").pop() ?? value;
+}
+
 // Direct write verbs
 const KUBECTL_WRITE_VERBS: Record<string, true> = {
   apply: true,
@@ -56,6 +60,12 @@ const KUBECTL_VALUE_FLAGS: Record<string, true> = {
   "-o": true,
   "--output": true,
   "--field-selector": true,
+  "--as": true,
+  "--as-group": true,
+  "--as-uid": true,
+  "--request-timeout": true,
+  "--token": true,
+  "--certificate-authority": true,
 };
 
 type KubectlResult = { kind: "write"; verb: string } | { kind: "rollout-write"; sub: string } | { kind: "pass" } | { kind: "dynamic" };
@@ -104,7 +114,7 @@ export default function (pi: HookAPI) {
 
     for (const { words } of ast.commands) {
       if (words.length === 0) continue;
-      if (words[0].dynamic || words[0].text !== "kubectl") continue;
+      if (words[0].dynamic || executableName(words[0].text) !== "kubectl") continue;
 
       const result = classifyKubectlCommand(words);
 

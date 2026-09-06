@@ -29,6 +29,10 @@
 import type { HookAPI } from "../lib/hook-api.ts";
 import { parseShellAst, type ShellWord } from "../lib/shell-ast.ts";
 
+function executableName(value: string): string {
+  return value.split("/").pop() ?? value;
+}
+
 // ---------------------------------------------------------------------------
 // Verb tables
 // ---------------------------------------------------------------------------
@@ -301,7 +305,7 @@ export default function (pi: HookAPI) {
     for (const { words } of ast.commands) {
       if (words.length === 0) continue;
       // Only inspect commands whose executable is literally "gcx"
-      if (words[0].dynamic || words[0].text !== "gcx") continue;
+      if (words[0].dynamic || executableName(words[0].text) !== "gcx") continue;
 
       // --- gcx api: only HTTP method / data flags matter ---
       if (!words[1]?.dynamic && words[1]?.text === "api") {

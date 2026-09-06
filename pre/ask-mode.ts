@@ -7,7 +7,7 @@
 // ------
 //
 // 1. During a session, use the /ask slash command:
-//    /ask           Toggle ask mode on
+//    /ask           Toggle ask mode
 //    /ask off       Toggle ask mode off
 //    /ask status    Check ask mode status
 //
@@ -58,11 +58,15 @@ export default function (pi: HookAPI) {
         return;
       }
 
-      // Default: toggle on (bare /ask or explicit /ask on)
+      // Bare /ask toggles; explicit `on` always enables.
       if (subcommand === "on" || !subcommand) {
-        askModeEnabled = true;
+        askModeEnabled = subcommand === "on" ? true : !askModeEnabled;
         if (ctx.hasUI) {
-          await ctx.ui.notify("Ask mode enabled. Only read and web_search tools are available.");
+          await ctx.ui.notify(
+            askModeEnabled
+              ? "Ask mode enabled. Only read and web_search tools are available."
+              : "Ask mode disabled. All tools are available.",
+          );
         }
         return;
       }

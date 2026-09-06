@@ -358,13 +358,14 @@ function commitAdvisory(command: string, problem: string): string {
 function nestedShellCommand(words: ShellWord[]): NestedShell {
   const executable = executableName(words[0]?.text);
   if (executable === "eval") return { command: words[1] };
+  if (executable === "source" || executable === ".") return { error: "sources a shell script whose commands cannot be inspected safely" };
   if (!["bash", "dash", "fish", "ksh", "sh", "zsh"].includes(executable)) return {};
 
   for (let index = 1; index < words.length; ) {
     const option = words[index];
     if (option.dynamic) return { error: `uses dynamic ${executable} options that cannot be inspected safely` };
-    if (option.text === "--") return {};
-    if (!option.text.startsWith("-")) return {};
+    if (option.text === "--") return { error: `executes ${executable} script code from a file that cannot be inspected safely` };
+    if (!option.text.startsWith("-")) return { error: `executes ${executable} script code from a file that cannot be inspected safely` };
     if (/^-[^-]*[oO]/.test(option.text)) {
       if (/^-[^-]*c/.test(option.text)) return { error: `combines ${executable} command and value-taking options ambiguously` };
       index += 2;
@@ -419,6 +420,11 @@ async function evaluateCommandPolicyWithAllowedCommands(
       };
     const words = unwrapped.words;
     if (words.length === 0) continue;
+    if (words.some((word) => word.dynamic))
+      return {
+        kind: "destructive",
+        reason: destructiveAdvisory(command, cwd, "uses shell expansion, so its arguments cannot be verified safely"),
+      };
     if (words[0].dynamic)
       return {
         kind: "destructive",
@@ -462,6 +468,48 @@ async function evaluateCommandPolicyWithAllowedCommands(
     if (git.error) return { kind: "destructive", reason: destructiveAdvisory(command, cwd, git.error) };
     const gitExplanation = destructiveGitExplanation(git);
     if (gitExplanation) return { kind: "destructive", reason: destructiveAdvisory(command, cwd, gitExplanation) };
+    const knownGitCommands = new Set([
+      "add",
+      "bisect",
+      "blame",
+      "cat-file",
+      "commit",
+      "check-attr",
+      "check-ignore",
+      "check-mailmap",
+      "diff",
+      "describe",
+      "fetch",
+      "grep",
+      "help",
+      "init",
+      "log",
+      "ls-files",
+      "ls-remote",
+      "merge-base",
+      "mv",
+      "name-rev",
+      "reflog",
+      "remote",
+      "rev-parse",
+      "rev-list",
+      "show",
+      "shortlog",
+      "status",
+      "submodule",
+      "verify-commit",
+      "verify-tag",
+      "version",
+    ]);
+    if (!knownGitCommands.has(git.name))
+      return {
+        kind: "destructive",
+        reason: destructiveAdvisory(
+          command,
+          cwd,
+          `uses unknown Git subcommand '${git.name}', which may be an alias hiding a prohibited operation`,
+        ),
+      };
     if (git.name === "commit") {
       const parsed = parseCommitMessage(git.args);
       const problem = parsed.error ?? validateCommitMessage(parsed.message ?? "");

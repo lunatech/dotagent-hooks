@@ -14,12 +14,20 @@
 import type { HookAPI } from "../lib/hook-api.ts";
 import { parseShellAst, type ShellWord } from "../lib/shell-ast.ts";
 
+function executableName(value: string): string {
+  return value.split("/").pop() ?? value;
+}
+
 // Read-only action prefixes — anything starting with these is allowed through.
 const AWS_READONLY_PREFIX = /^(describe|list|get|head|check|query|scan|search|validate|generate-presigned|help|wait)/;
 
 // AWS global flags that consume the next word as a value.
 // All other global flags are boolean (--debug, --no-verify-ssl, etc.).
 const AWS_VALUE_FLAGS: Record<string, true> = {
+  "-p": true,
+  "-r": true,
+  "-o": true,
+  "-q": true,
   "--profile": true,
   "--region": true,
   "--endpoint-url": true,
@@ -46,7 +54,8 @@ function classifyAwsCommand(words: ShellWord[]): AwsResult {
     const w = words[i];
     if (w.text.startsWith("-")) {
       if (w.dynamic) return { kind: "dynamic" };
-      if (AWS_VALUE_FLAGS[w.text]) i++; // skip the value word
+      const flag = w.text.split("=", 1)[0];
+      if (AWS_VALUE_FLAGS[flag] && !w.text.includes("=")) i++; // skip the value word
       continue;
     }
     if (w.dynamic) return { kind: "dynamic" };
@@ -73,7 +82,7 @@ export default function (pi: HookAPI) {
 
     for (const { words } of ast.commands) {
       if (words.length === 0) continue;
-      if (words[0].dynamic || words[0].text !== "aws") continue;
+      if (words[0].dynamic || executableName(words[0].text) !== "aws") continue;
 
       const result = classifyAwsCommand(words);
 

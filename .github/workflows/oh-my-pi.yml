@@ -1,0 +1,27 @@
+name: Verify Oh My Pi integration
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  oh-my-pi:
+    name: Load hooks with Oh My Pi
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Load the hooks with Oh My Pi in Docker
+        run: >-
+          docker run --rm
+          -v "${{ github.workspace }}:/src:ro"
+          -w /work
+          -e HOME=/tmp/omp-home
+          oven/bun:1.3.14
+          bash -lc
+          'cp -a /src/. /work/ && bun install --no-save && mkdir -p /tmp/omp-home/.omp/agent && ln -s /work /tmp/omp-home/.omp/agent/hooks && bunx --bun @oh-my-pi/pi-coding-agent --help'

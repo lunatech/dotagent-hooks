@@ -114,28 +114,39 @@ git -C ~/.agents/hooks config core.hooksPath .githooks
 
 ### Pi
 
-Pi can reference the same checkout as a local package. From the existing checkout, add its package reference:
+Pi loads extensions from `~/.pi/agent/extensions/`. Link the shared checkout as a directory so the Pi entrypoint and its relative imports resolve inside the checkout:
 
 ```sh
-pi install ~/.agents/hooks
+mkdir -p ~/.pi/agent/extensions
+ln -s ~/.agents/hooks ~/.pi/agent/extensions/dotagent-hooks
 ```
 
-Pi records the local path in `~/.pi/agent/settings.json` and loads `extensions/index.ts` from the package manifest. This is a second discovery reference to the same checkout, not a second installation. Do not link Pi to `~/.omp/agent/hooks`.
+This makes Pi load `~/.agents/hooks/extensions/index.ts`, which registers all hooks from `pre/`. Do not symlink `extensions/index.ts` directly: its `../pre/...` imports would resolve relative to Pi's extension directory instead of this checkout. Do not link Pi to `~/.omp/agent/hooks`.
 
-Exit Pi and launch a new process after installation. Pi discovers packages during process startup.
+If the destination already exists, inspect it before replacing it:
+
+```sh
+ls -ld ~/.pi/agent/extensions/dotagent-hooks
+readlink ~/.pi/agent/extensions/dotagent-hooks
+```
+
+Exit Pi and launch a new process after installation. Pi discovers extensions during process startup.
 
 
 ### How installation works
 
 The repository lives at `~/.agents/hooks`. `npm install` supplies the pinned Tree-sitter runtime and Bash grammar used by the hook; without those packages, OMP reports a load failure and does not enforce the policy.
 
-The symlink exposes the repository at OMP's default-profile hook path:
+The symlinks expose the same repository to both harnesses:
 
 ```text
-~/.omp/agent/hooks -> ../../.agents/hooks
+~/.omp/agent/hooks                    -> ../../.agents/hooks
+~/.pi/agent/extensions/dotagent-hooks -> ~/.agents/hooks
 ```
 
-Exit OMP and launch a new OMP process after installation. OMP discovers hooks during process startup; opening another conversation in an existing process does not reload them.
+OMP discovers `pre/*.ts`; Pi discovers `extensions/index.ts`. Both use the same checkout and installed dependencies.
+
+Exit OMP or Pi and launch a new process after installation. Hooks and extensions are discovered during process startup; opening another conversation in an existing process does not reload them.
 
 ## Named OMP profiles
 
