@@ -22,7 +22,7 @@
 // All other tools return:
 //   "you are in ask mode. Do not try to invoke external tools. If required, ask user to provide output"
 
-import type { HookAPI } from "@oh-my-pi/pi-coding-agent/extensibility/hooks";
+import type { HookAPI } from "../lib/hook-api.ts";
 
 // Module-level state: persists across tool calls within a session
 // Initialized from environment variable or defaults to false

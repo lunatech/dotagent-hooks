@@ -15,7 +15,7 @@
 // after it (gh pr comment -R owner/repo); both positions are handled.
 //
 
-import type { HookAPI } from "@oh-my-pi/pi-coding-agent/extensibility/hooks";
+import type { HookAPI } from "../lib/hook-api.ts";
 import { parseShellAst, type ShellWord } from "../lib/shell-ast.ts";
 
 // `gh pr` sub-commands that post to or modify the PR discussion thread.

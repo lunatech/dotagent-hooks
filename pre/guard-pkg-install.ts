@@ -11,7 +11,7 @@
 //   - appends uv/uvx guidance to what the LLM sees
 //
 
-import type { HookAPI } from "@oh-my-pi/pi-coding-agent/extensibility/hooks";
+import type { HookAPI } from "../lib/hook-api.ts";
 
 const PIP = /\b(pip3?)\s+install\b/;
 const UV_ADD = /\buv\s+add\b/;

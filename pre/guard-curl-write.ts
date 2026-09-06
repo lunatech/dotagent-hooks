@@ -11,7 +11,7 @@
 // flag or value position are blocked with a precise "cannot verify" message.
 //
 
-import type { HookAPI } from "@oh-my-pi/pi-coding-agent/extensibility/hooks";
+import type { HookAPI } from "../lib/hook-api.ts";
 import { parseShellAst, type ShellWord } from "../lib/shell-ast.ts";
 
 const WRITE_METHODS: Record<string, true> = {

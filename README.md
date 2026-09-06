@@ -1,6 +1,6 @@
 # dotagent-hooks
 
-`dotagent-hooks` provides an [Oh My Pi](https://github.com/can1357/oh-my-pi) hook that stops AI coding agents from running destructive or policy-violating commands.
+`dotagent-hooks` provides shared hooks for [Oh My Pi](https://github.com/can1357/oh-my-pi) and [pi](https://github.com/badlogic/pi-mono). They stop AI coding agents from running destructive or policy-violating commands.
 
 ## Command policy
 
@@ -111,6 +111,19 @@ mkdir -p ~/.omp/agent
 ln -s ../../.agents/hooks ~/.omp/agent/hooks
 git -C ~/.agents/hooks config core.hooksPath .githooks
 ```
+
+### Pi
+
+Pi can reference the same checkout as a local package. From the existing checkout, add its package reference:
+
+```sh
+pi install ~/.agents/hooks
+```
+
+Pi records the local path in `~/.pi/agent/settings.json` and loads `extensions/index.ts` from the package manifest. This is a second discovery reference to the same checkout, not a second installation. Do not link Pi to `~/.omp/agent/hooks`.
+
+Exit Pi and launch a new process after installation. Pi discovers packages during process startup.
+
 
 ### How installation works
 
