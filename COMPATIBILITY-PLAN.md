@@ -127,5 +127,5 @@ Verify:
 - destructive commands are blocked through both paths;
 - safe commands pass through both paths;
 - tool-result annotation still works;
-- `/ask` remains correctly registered;
+- OMP registers the shared `/ask` hook while pi leaves its built-in `/ask` command available;
 - no shared hook module imports an OMP- or pi-specific coding-agent package.

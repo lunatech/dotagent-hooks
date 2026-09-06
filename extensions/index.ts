@@ -1,5 +1,4 @@
 import type { HookAPI } from "../lib/hook-api.ts";
-import askMode from "../pre/ask-mode.ts";
 import commandSafetyHook from "../pre/command-safety.ts";
 import guardAwsWrite from "../pre/guard-aws-write.ts";
 import guardCurlWrite from "../pre/guard-curl-write.ts";
@@ -16,7 +15,6 @@ const hookFactories = [
   guardGhPrDiscussion,
   guardKubectlWrite,
   guardPkgInstall,
-  askMode,
 ] satisfies Array<(pi: HookAPI) => void>;
 
 export default function piExtension(pi: HookAPI): void {
