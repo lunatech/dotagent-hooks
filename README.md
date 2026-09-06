@@ -1,6 +1,6 @@
 # dotagent-hooks
 
-`dotagent-hooks` provides an [Oh My Pi](https://github.com/can1357/oh-my-pi) hook that stops AI coding agents from running destructive or policy-violating commands.
+`dotagent-hooks` provides shared hooks for [Oh My Pi](https://github.com/can1357/oh-my-pi) and [pi](https://github.com/badlogic/pi-mono). They stop AI coding agents from running destructive or policy-violating commands.
 
 ## Command policy
 
@@ -24,7 +24,7 @@ The hooks block these commands and shell behaviors by default:
 
 The commit-safety hook also requires Git commit subjects in the form `<type>[optional scope]: <description>` and limits an optional commit body to two lines. A blocked-command advisory explains the effect, shows the working directory, identifies the local opt-in file for supported non-sudo executables, and gives the user the exact command to run personally. It also states that opt-in cannot override `sudo`, destructive Git operations, or shell behavior whose effects cannot be inspected safely.
 
-The `ask-mode` hook provides a `/ask` slash command that restricts the agent to `read` and `web_search` only. Toggle with `/ask`, `/ask off`, and `/ask status`, or start with `OMP_ASK_MODE=1`.
+The OMP `ask-mode` hook provides a `/ask` slash command that restricts the agent to `read` and `web_search` only. Toggle with `/ask`, `/ask off`, and `/ask status`, or start with `OMP_ASK_MODE=1`. Pi uses its own built-in `/ask` command.
 
 When a Python command fails with a `ModuleNotFoundError` or `ImportError`, the `guard-pkg-install` hook appends `uv`/`uvx` guidance to the output without blocking the result.
 
@@ -112,17 +112,41 @@ ln -s ../../.agents/hooks ~/.omp/agent/hooks
 git -C ~/.agents/hooks config core.hooksPath .githooks
 ```
 
+### Pi
+
+Pi loads extensions from `~/.pi/agent/extensions/`. Link the shared checkout as a directory so the Pi entrypoint and its relative imports resolve inside the checkout:
+
+```sh
+mkdir -p ~/.pi/agent/extensions
+ln -s ~/.agents/hooks ~/.pi/agent/extensions/dotagent-hooks
+```
+
+This makes Pi load `~/.agents/hooks/extensions/index.ts`, which registers all hooks from `pre/`. Do not symlink `extensions/index.ts` directly: its `../pre/...` imports would resolve relative to Pi's extension directory instead of this checkout. Do not link Pi to `~/.omp/agent/hooks`.
+
+If the destination already exists, inspect it before replacing it:
+
+```sh
+ls -ld ~/.pi/agent/extensions/dotagent-hooks
+readlink ~/.pi/agent/extensions/dotagent-hooks
+```
+
+Exit Pi and launch a new process after installation. Pi discovers extensions during process startup.
+
+
 ### How installation works
 
 The repository lives at `~/.agents/hooks`. `npm install` supplies the pinned Tree-sitter runtime and Bash grammar used by the hook; without those packages, OMP reports a load failure and does not enforce the policy.
 
-The symlink exposes the repository at OMP's default-profile hook path:
+The symlinks expose the same repository to both harnesses:
 
 ```text
-~/.omp/agent/hooks -> ../../.agents/hooks
+~/.omp/agent/hooks                    -> ../../.agents/hooks
+~/.pi/agent/extensions/dotagent-hooks -> ~/.agents/hooks
 ```
 
-Exit OMP and launch a new OMP process after installation. OMP discovers hooks during process startup; opening another conversation in an existing process does not reload them.
+OMP discovers `pre/*.ts`; Pi discovers `extensions/index.ts`. Both use the same checkout and installed dependencies.
+
+Exit OMP or Pi and launch a new process after installation. Hooks and extensions are discovered during process startup; opening another conversation in an existing process does not reload them.
 
 ## Named OMP profiles
 

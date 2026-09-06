@@ -9,5 +9,5 @@
     "strict": true,
     "target": "ES2023"
   },
-  "include": ["lib/**/*.ts", "pre/**/*.ts", "types/**/*.d.ts"]
+  "include": ["lib/**/*.ts", "pre/**/*.ts", "extensions/**/*.ts", "types/**/*.d.ts"]
 }
