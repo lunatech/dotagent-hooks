@@ -333,6 +333,7 @@ function destructiveAdvisory(command: string, cwd: string, explanation: string):
     "User opt-in: supported non-sudo destructive executables can be enabled in user-allowed-commands beside user-allowed-commands.example.",
     "This cannot override sudo, destructive Git operations, or shell behavior whose effects cannot be inspected safely.",
     "Tell the user to execute it personally only if that effect is intended:",
+    "Generate a zsh one-liner; use \\ line continuations only when splitting it across multiple lines.",
     "1. Open a terminal.",
     `2. Change to the same working directory: cd -- ${JSON.stringify(cwd)}`,
     "3. Review the command and verify backups, target paths, branch, and remote as applicable.",
