@@ -26,6 +26,23 @@ The commit-safety hook also requires Git commit subjects in the form `<type>[opt
 
 The `ask-mode` hook provides a `/ask` slash command that restricts the agent to `read` and `web_search` only. Toggle with `/ask`, `/ask off`, and `/ask status`, or start with `OMP_ASK_MODE=1`.
 
+The `output-policy` hook guards **only streamed agent responses**. It does not register a `tool_result` handler and therefore does not truncate, minimize, or otherwise modify tool output. By default it stops a response after 96,000 streamed characters or after 24 consecutive repeated substantial lines with at least 1,536 repeated characters. Blank lines, code fences, XML-like tags, and Markdown separators do not extend or reset a repetition streak. Configure thresholds in the local `output-policy` file, beside `output-policy.example`:
+
+```sh
+cp ~/.agents/hooks/output-policy.example ~/.agents/hooks/output-policy
+```
+
+The file uses `key=value` entries:
+
+```text
+maxChars=96000
+maxRepeats=24
+minBlockChars=32
+minRepeatedChars=1536
+```
+
+Set `maxChars=0` to disable only the character cap. The hook reads the file when OMP starts; restart OMP after changing it. The hook does not save or rewrite the partial response.
+
 When a Python command fails with a `ModuleNotFoundError` or `ImportError`, the `guard-pkg-install` hook appends `uv`/`uvx` guidance to the output without blocking the result.
 
 ### User-allowed commands

@@ -1,3 +1,4 @@
 node_modules/
 .tmp/
 user-allowed-commands
+output-policy
