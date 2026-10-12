@@ -1,0 +1,26 @@
+name: Node tests (Docker)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Check and test in Node Docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run checks and tests in Docker
+        run: >-
+          docker run --rm
+          -v "${{ github.workspace }}:/src:ro"
+          -w /work
+          node:22-bookworm
+          bash -lc
+          'cp -a /src/. /work/ && npm ci --ignore-scripts && npm run check && npm test'

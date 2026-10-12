@@ -5,10 +5,19 @@
   "type": "module",
   "scripts": {
     "check": "npm run typecheck && npm run format:check",
-    "format": "prettier --write \"pre/**/*.ts\" \"lib/**/*.ts\" \"*.ts\" \"types/**/*.d.ts\"",
-    "format:check": "prettier --check \"pre/**/*.ts\" \"lib/**/*.ts\" \"*.ts\" \"types/**/*.d.ts\"",
+    "format": "prettier --write \"pre/**/*.ts\" \"lib/**/*.ts\" \"*.ts\" \"types/**/*.d.ts\" \"extensions/**/*.ts\"",
+    "format:check": "prettier --check \"pre/**/*.ts\" \"lib/**/*.ts\" \"*.ts\" \"types/**/*.d.ts\" \"extensions/**/*.ts\"",
+
     "test": "node --test test/*.test.mjs",
     "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "pi-package"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions/index.ts"
+    ]
   },
   "engines": {
     "node": ">=22.18"
@@ -21,18 +30,5 @@
     "@types/node": "26.1.1",
     "prettier": "3.6.2",
     "typescript": "5.9.3"
-  },
-  "pi": {
-    "extensions": [
-      "./pre/ask-mode.ts",
-      "./pre/command-safety.ts",
-      "./pre/guard-aws-write.ts",
-      "./pre/guard-curl-write.ts",
-      "./pre/guard-gcx-write.ts",
-      "./pre/guard-gh-pr-discussion.ts",
-      "./pre/guard-kubectl-write.ts",
-      "./pre/guard-pkg-install.ts",
-      "./pre/output-policy.ts"
-    ]
   }
 }

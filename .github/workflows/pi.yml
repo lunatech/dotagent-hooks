@@ -1,0 +1,26 @@
+name: Verify pi integration
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  pi:
+    name: Load hooks with pi
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Load the extension with pi in Docker
+        run: >-
+          docker run --rm
+          -v "${{ github.workspace }}:/src:ro"
+          -w /work
+          node:22-bookworm
+          bash -lc
+          'cp -a /src/. /work/ && npm ci --ignore-scripts && npm install --no-save --ignore-scripts @mariozechner/pi-coding-agent && npx --yes @mariozechner/pi-coding-agent --extension /work/extensions/index.ts --help'

@@ -11,8 +11,12 @@
 // flag or value position are blocked with a precise "cannot verify" message.
 //
 
-import type { HookAPI } from "@oh-my-pi/pi-coding-agent/extensibility/hooks";
+import type { HookAPI } from "../lib/hook-api.ts";
 import { parseShellAst, type ShellWord } from "../lib/shell-ast.ts";
+
+function executableName(value: string): string {
+  return value.split("/").pop() ?? value;
+}
 
 const WRITE_METHODS: Record<string, true> = {
   POST: true,
@@ -39,12 +43,14 @@ function classifyCurlCommand(words: ShellWord[]): CurlResult {
       continue;
     }
 
-    // --request=METHOD (attached form)
+    // --request=METHOD and the common attached short form -XPOST.
     const reqMatch = t.match(/^--request=(.+)$/i);
     if (reqMatch && WRITE_METHODS[reqMatch[1].toUpperCase()]) return { kind: "write-method" };
+    const shortRequest = t.match(/^-X(.+)$/i);
+    if (shortRequest && WRITE_METHODS[shortRequest[1].toUpperCase()]) return { kind: "write-method" };
 
     // -d / --data / --data-raw / --data-binary (standalone or =value)
-    if (t === "-d" || t === "--data" || t === "--data-raw" || t === "--data-binary") return { kind: "write-data" };
+    if (t === "-d" || t.startsWith("-d") || t === "--data" || t === "--data-raw" || t === "--data-binary") return { kind: "write-data" };
     if (/^(?:--data|--data-raw|--data-binary)=/.test(t)) return { kind: "write-data" };
   }
   return { kind: "pass" };
@@ -63,7 +69,7 @@ export default function (pi: HookAPI) {
 
     for (const { words } of ast.commands) {
       if (words.length === 0) continue;
-      if (words[0].dynamic || words[0].text !== "curl") continue;
+      if (words[0].dynamic || executableName(words[0].text) !== "curl") continue;
 
       const result = classifyCurlCommand(words);
 

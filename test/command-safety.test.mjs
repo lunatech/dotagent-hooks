@@ -14,6 +14,7 @@ async function assertBlocked(command, kind = "destructive", allowedCommandsPath 
     assert.match(result.reason, /What it does:/);
     assert.ok(result.reason.includes(command));
     assert.ok(result.reason.includes('cd -- "/tmp/repo"'));
+    assert.match(result.reason, /Generate a zsh one-liner/);
   }
 }
 
