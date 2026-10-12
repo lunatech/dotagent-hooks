@@ -1,6 +1,6 @@
 # dotagent-hooks
 
-`dotagent-hooks` provides shared hooks for [Oh My Pi](https://github.com/can1357/oh-my-pi) and [pi](https://github.com/badlogic/pi-mono), including command safety, write guards, ask mode, and streamed-output limits. Pi loads the package extensions when it discovers this package.
+`dotagent-hooks` provides command-safety, write-guard, and streamed-output policy hooks for [Oh My Pi](https://github.com/can1357/oh-my-pi) and [pi](https://github.com/badlogic/pi-mono). Oh My Pi also provides an ask-mode hook; Pi uses its built-in `/ask` command. Pi loads its compatible package extensions when it discovers this package.
 
 ## Command policy
 
@@ -26,7 +26,7 @@ The commit-safety hook also requires Git commit subjects in the form `<type>[opt
 
 The OMP `ask-mode` hook provides a `/ask` slash command that restricts the agent to `read` and `web_search` only. Toggle with `/ask`, `/ask off`, and `/ask status`, or start with `OMP_ASK_MODE=1`. Pi uses its own built-in `/ask` command.
 
-The `output-policy` hook guards **only streamed agent responses**. It does not register a `tool_result` handler and therefore does not truncate, minimize, or otherwise modify tool output. By default it stops a response after 96,000 streamed characters or after 24 consecutive repeated substantial lines with at least 1,536 repeated characters. Blank lines, code fences, XML-like tags, and Markdown separators do not extend or reset a repetition streak. Configure thresholds in the local `output-policy` file, beside `output-policy.example`:
+The `output-policy` hook guards **only streamed agent text responses**. It does not register a `tool_result` handler and therefore does not truncate, minimize, or otherwise modify tool output. By default it stops a response after 96,000 streamed characters or after 24 consecutive repeated substantial lines with at least 1,536 repeated characters. Blank lines, code fences, XML-like tags, and Markdown separators do not extend or reset a repetition streak. Configure thresholds in the local `output-policy` file, beside `output-policy.example`:
 
 ```sh
 cp ~/.agents/hooks/output-policy.example ~/.agents/hooks/output-policy
@@ -41,7 +41,7 @@ minBlockChars=32
 minRepeatedChars=1536
 ```
 
-Set `maxChars=0` to disable only the character cap. The hook reads the file when OMP starts; restart OMP after changing it. The hook does not save or rewrite the partial response.
+Set `maxChars=0` to disable only the character cap. The hook reads the file when either agent starts; restart the agent after changing it. The hook does not save or rewrite the partial response.
 
 When a Python command fails with a `ModuleNotFoundError` or `ImportError`, the `guard-pkg-install` hook appends `uv`/`uvx` guidance to the output without blocking the result.
 

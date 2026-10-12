@@ -59,6 +59,28 @@ test("output-policy aborts repeated assistant output", async () => {
   }
 });
 
+test("output-policy ignores reasoning and tool-call deltas", async () => {
+  const original = (() => {
+    try {
+      return readFileSync(configPath, "utf8");
+    } catch {
+      return undefined;
+    }
+  })();
+  writeFileSync(configPath, "maxChars=0\nmaxRepeats=2\nminBlockChars=8\nminRepeatedChars=16\n");
+  try {
+    const harness = mock();
+    outputPolicy(harness.pi);
+    const repeated = "reasoning that should not count\n".repeat(30);
+    await harness.fire("message_update", { assistantMessageEvent: { type: "thinking_delta", delta: repeated } });
+    await harness.fire("message_update", { assistantMessageEvent: { type: "toolcall_delta", delta: repeated } });
+    assert.equal(harness.aborts(), 0);
+  } finally {
+    if (original === undefined) unlinkSync(configPath);
+    else writeFileSync(configPath, original);
+  }
+});
+
 test("output-policy has no tool-result handler", () => {
   const harness = mock();
   outputPolicy(harness.pi);

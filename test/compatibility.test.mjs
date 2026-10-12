@@ -6,7 +6,7 @@ import piExtension from "../extensions/index.ts";
 import commandSafetyHook from "../pre/command-safety.ts";
 
 function createMockAPI() {
-  const handlers = { tool_call: [], tool_result: [] };
+  const handlers = { tool_call: [], tool_result: [], message_update: [], message_start: [], turn_start: [], agent_start: [], agent_end: [] };
   const commands = {};
   const pi = {
     on(event, handler) {
@@ -20,6 +20,9 @@ function createMockAPI() {
   return {
     pi,
     commands,
+    hasHandler(event) {
+      return handlers[event].length > 0;
+    },
     async fireToolCall(toolName, command) {
       const event = { toolName, input: { command, cwd: "/tmp/repo" } };
       for (const handler of handlers.tool_call) {
@@ -46,6 +49,12 @@ test("pi entrypoint registers the shared command policies", async () => {
   assert.equal(blocked?.block, true);
   assert.equal(await mock.fireToolCall("bash", "git status"), undefined);
   assert.equal(await mock.fireToolCall("bash", "echo 'git push origin main'"), undefined);
+});
+
+test("pi entrypoint registers the streamed output policy", () => {
+  const mock = createMockAPI();
+  piExtension(mock.pi);
+  assert.equal(mock.hasHandler("message_update"), true);
 });
 
 test("pi entrypoint preserves tool-result annotation and leaves built-in /ask available", async () => {

@@ -1,4 +1,4 @@
-import type { HookAPI } from "@oh-my-pi/pi-coding-agent/extensibility/hooks";
+import type { HookAPI } from "../lib/hook-api.ts";
 import { readOutputPolicyConfig } from "../output-policy-config.ts";
 
 const MAX_PENDING_CHARS = 16_384;
@@ -27,7 +27,7 @@ function syntaxOnly(line: string): boolean {
 function deltaOf(event: any): string | undefined {
   const update = event?.assistantMessageEvent ?? event;
   if (typeof update?.delta !== "string") return undefined;
-  if (!["text", "text_delta", "thinking", "thinking_delta", "toolcall_delta"].includes(String(update.type ?? ""))) return undefined;
+  if (!["text", "text_delta"].includes(String(update.type ?? ""))) return undefined;
   return update.delta;
 }
 
