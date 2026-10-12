@@ -1,18 +1,19 @@
 import type { HookAPI } from "../lib/hook-api.ts";
-import { readOutputPolicyConfig } from "../output-policy-config.ts";
+import { readOutputPolicyConfig, type OutputPolicyConfig } from "../output-policy-config.ts";
 
 const MAX_PENDING_CHARS = 16_384;
 
 interface State {
   totalChars: number;
   pending: string;
+  pendingTruncated: boolean;
   lastBlock?: string;
   repeats: number;
   repeatedChars: number;
   aborted: boolean;
 }
 function fresh(): State {
-  return { totalChars: 0, pending: "", repeats: 0, repeatedChars: 0, aborted: false };
+  return { totalChars: 0, pending: "", pendingTruncated: false, repeats: 0, repeatedChars: 0, aborted: false };
 }
 function normalize(line: string): string {
   return line.trim().replace(/\s+/g, " ");
@@ -31,8 +32,7 @@ function deltaOf(event: any): string | undefined {
   return update.delta;
 }
 
-export default function outputPolicy(pi: HookAPI): void {
-  const config = readOutputPolicyConfig();
+export default function outputPolicy(pi: HookAPI, config: OutputPolicyConfig = readOutputPolicyConfig()): void {
   let state = fresh();
   const reset = () => {
     state = fresh();
@@ -56,6 +56,13 @@ export default function outputPolicy(pi: HookAPI): void {
       const line = state.pending.slice(0, newline);
       state.pending = state.pending.slice(newline + 1);
       newline = state.pending.indexOf("\n");
+      if (state.pendingTruncated || line.length > MAX_PENDING_CHARS) {
+        state.pendingTruncated = false;
+        state.lastBlock = undefined;
+        state.repeats = 0;
+        state.repeatedChars = 0;
+        continue;
+      }
       const block = normalize(line);
       if (syntaxOnly(line)) continue;
       if (block.length < config.minBlockChars) {
@@ -74,12 +81,17 @@ export default function outputPolicy(pi: HookAPI): void {
         warning = `[output-policy:repetition=${state.repeats}]\nModel output stopped after ${state.repeats} consecutive repeated blocks. Retry or switch model.`;
       }
     }
-    if (state.pending.length > MAX_PENDING_CHARS) state.pending = state.pending.slice(-MAX_PENDING_CHARS);
+    if (state.pending.length > MAX_PENDING_CHARS) {
+      state.pending = state.pending.slice(-MAX_PENDING_CHARS);
+      state.pendingTruncated = true;
+    }
     if (warning === undefined) return;
     state.aborted = true;
     ctx.abort();
     try {
-      ctx.ui?.notify(warning, "warning");
+      void Promise.resolve(ctx.ui?.notify(warning, "warning")).catch(() => {
+        /* notification failures must not interrupt the abort */
+      });
     } catch {
       /* abort must not depend on UI notifications */
     }
