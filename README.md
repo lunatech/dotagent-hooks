@@ -1,6 +1,6 @@
 # dotagent-hooks
 
-`dotagent-hooks` provides an [Oh My Pi](https://github.com/can1357/oh-my-pi) hook that stops AI coding agents from running destructive or policy-violating commands.
+`dotagent-hooks` provides [Oh My Pi](https://github.com/can1357/oh-my-pi) extensions for command safety, write guards, ask mode, and streamed-output limits. All hooks under `pre/` are registered as package extensions and load when Pi discovers this package.
 
 ## Command policy
 

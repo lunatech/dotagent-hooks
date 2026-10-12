@@ -24,6 +24,14 @@
   },
   "pi": {
     "extensions": [
+      "./pre/ask-mode.ts",
+      "./pre/command-safety.ts",
+      "./pre/guard-aws-write.ts",
+      "./pre/guard-curl-write.ts",
+      "./pre/guard-gcx-write.ts",
+      "./pre/guard-gh-pr-discussion.ts",
+      "./pre/guard-kubectl-write.ts",
+      "./pre/guard-pkg-install.ts",
       "./pre/output-policy.ts"
     ]
   }
