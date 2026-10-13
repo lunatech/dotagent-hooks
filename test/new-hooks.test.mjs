@@ -4,11 +4,15 @@
 // observable block/pass behaviour without inspecting source text.
 
 import assert from "node:assert/strict";
+import { execFile as execFileCallback } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import test from "node:test";
+import { promisify } from "node:util";
 
 import guardAwsWrite from "../pre/guard-aws-write.ts";
 import guardCurlWrite from "../pre/guard-curl-write.ts";
 import guardGcxWrite from "../pre/guard-gcx-write.ts";
+import guardGitProtectedBranch from "../pre/guard-git-protected-branch.ts";
 import guardKubectlWrite from "../pre/guard-kubectl-write.ts";
 import guardPkgInstall from "../pre/guard-pkg-install.ts";
 import askMode from "../pre/ask-mode.ts";
@@ -31,8 +35,8 @@ function createMockPI() {
       },
     },
     commands,
-    async fireToolCall(toolName, command) {
-      const event = { toolName, input: { command } };
+    async fireToolCall(toolName, command, cwd) {
+      const event = { toolName, input: { command, ...(cwd ? { cwd } : {}) } };
       for (const h of handlers.tool_call) {
         const result = await h(event);
         if (result) return result;
@@ -58,12 +62,59 @@ async function assertBlocked(hookFactory, toolName, command) {
   return result;
 }
 
-async function assertAllowed(hookFactory, toolName, command) {
+async function assertAllowed(hookFactory, toolName, command, cwd) {
   const mock = createMockPI();
   hookFactory(mock.pi);
-  const result = await mock.fireToolCall(toolName, command);
+  const result = await mock.fireToolCall(toolName, command, cwd);
   assert.equal(result, undefined, `expected pass for: ${command}`);
 }
+
+const execFile = promisify(execFileCallback);
+
+async function initGitRepository(branch) {
+  const directory = await mkdtemp("/tmp/dotagent-hooks-git-");
+  await execFile("git", ["init", "-b", branch, directory]);
+  await execFile("git", ["-C", directory, "config", "user.email", "test@example.com"]);
+  await execFile("git", ["-C", directory, "config", "user.name", "Test User"]);
+  await writeFile(`${directory}/file.txt`, "content\n");
+  await execFile("git", ["-C", directory, "add", "file.txt"]);
+  await execFile("git", ["-C", directory, "commit", "-m", "feat: initial commit"]);
+  return directory;
+}
+
+async function assertGitCommitBlockedOn(directory, command) {
+  const mock = createMockPI();
+  guardGitProtectedBranch(mock.pi);
+  const result = await mock.fireToolCall("bash", command, directory);
+  assert.equal(result?.block, true, command);
+  return result;
+}
+
+test("guard-git-protected-branch blocks commits on main and allows feature branches", async (context) => {
+  const main = await initGitRepository("main");
+  const feature = await initGitRepository("feature/test");
+  context.after(async () => {
+    await rm(main, { recursive: true, force: true });
+    await rm(feature, { recursive: true, force: true });
+  });
+
+  const blocked = await assertGitCommitBlockedOn(main, "git commit -m 'feat: change'");
+  assert.match(blocked.reason, /protected branch 'main'/);
+  await assertAllowed(guardGitProtectedBranch, "bash", "git commit -m 'feat: change'", feature);
+});
+
+test("guard-git-protected-branch parses -C and avoids quoted false positives", async (context) => {
+  const main = await initGitRepository("main");
+  context.after(() => rm(main, { recursive: true, force: true }));
+
+  await assertGitCommitBlockedOn(main, `git -C ${main} commit -m 'feat: change'`);
+  await assertAllowed(guardGitProtectedBranch, "bash", "echo 'git commit -m \\\"feat: change\\\"'", main);
+});
+
+test("guard-git-protected-branch blocks dynamic repository and sub-command tokens", async () => {
+  await assertBlocked(guardGitProtectedBranch, "bash", "git -C \"$REPO\" commit -m 'feat: change'");
+  await assertBlocked(guardGitProtectedBranch, "bash", "git $ACTION -m 'feat: change'");
+});
 
 // ---------------------------------------------------------------------------
 // guard-aws-write
@@ -122,7 +173,7 @@ test("guard-gcx-write blocks known write verbs", async () => {
 
 test("guard-gcx-write blocks gcx api with write method", async () => {
   await assertBlocked(guardGcxWrite, "bash", "gcx api -X POST /api/v1/something");
-  await assertBlocked(guardGcxWrite, "bash", "gcx api --data '{\"key\":\"val\"}' /api/endpoint");
+  await assertBlocked(guardGcxWrite, "bash", 'gcx api --data \'{"key":"val"}\' /api/endpoint');
 });
 
 test("guard-gcx-write blocks unknown verbs conservatively", async () => {
