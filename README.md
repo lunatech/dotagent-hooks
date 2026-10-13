@@ -14,6 +14,7 @@ The hooks block these commands and shell behaviors by default:
 - package removal through `npm`, `pnpm`, `yarn`, `pip`, `pip3`, `brew`, `gem`, or `cargo`;
 - `find -delete`, `find -exec`, `find -execdir`, and `xargs`;
 - Git operations that publish, delete, or discard work: `push`, `clean`, `rm`, destructive `reset`, `restore`, `checkout`, forced `switch`, branch or tag deletion, and `stash drop` or `stash clear`;
+- direct Git commits on protected branches (`main`, `master`, `default`, or the repository's `origin/HEAD` default branch); the hook uses Tree-sitter to identify Git commands and Git commands to determine the current branch and repository selected by `git -C`;
 - shell output redirection, command or process substitution, malformed syntax, dynamic executable names, and dynamic policy-control arguments;
 - AWS CLI write/mutating operations: any `aws <service> <action>` where the action is not a read-only prefix (`describe`, `list`, `get`, `head`, `check`, `query`, `scan`, `search`, `validate`, `generate-presigned`, `help`, `wait`);
 - `curl` requests that mutate remote state: `-X POST/PUT/DELETE/PATCH`, `--request POST/PUT/DELETE/PATCH`, or any `--data`/`-d` flag;
@@ -148,7 +149,6 @@ readlink ~/.pi/agent/extensions/dotagent-hooks
 ```
 
 Exit Pi and launch a new process after installation. Pi discovers extensions during process startup.
-
 
 ### How installation works
 

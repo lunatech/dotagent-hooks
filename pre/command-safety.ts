@@ -496,6 +496,7 @@ async function evaluateCommandPolicyWithAllowedCommands(
       "show",
       "shortlog",
       "status",
+      "switch",
       "submodule",
       "verify-commit",
       "verify-tag",
