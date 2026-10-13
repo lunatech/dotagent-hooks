@@ -6,6 +6,7 @@ import guardGcxWrite from "../pre/guard-gcx-write.ts";
 import guardGhPrDiscussion from "../pre/guard-gh-pr-discussion.ts";
 import guardKubectlWrite from "../pre/guard-kubectl-write.ts";
 import guardPkgInstall from "../pre/guard-pkg-install.ts";
+import outputPolicy from "../pre/output-policy.ts";
 
 const hookFactories = [
   commandSafetyHook,
@@ -15,6 +16,7 @@ const hookFactories = [
   guardGhPrDiscussion,
   guardKubectlWrite,
   guardPkgInstall,
+  outputPolicy,
 ] satisfies Array<(pi: HookAPI) => void>;
 
 export default function piExtension(pi: HookAPI): void {

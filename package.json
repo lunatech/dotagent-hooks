@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "check": "npm run typecheck && npm run format:check",
-    "format": "prettier --write \"pre/**/*.ts\" \"lib/**/*.ts\" \"types/**/*.d.ts\" \"extensions/**/*.ts\"",
-    "format:check": "prettier --check \"pre/**/*.ts\" \"lib/**/*.ts\" \"types/**/*.d.ts\" \"extensions/**/*.ts\"",
+    "format": "prettier --write \"pre/**/*.ts\" \"lib/**/*.ts\" \"*.ts\" \"types/**/*.d.ts\" \"extensions/**/*.ts\"",
+    "format:check": "prettier --check \"pre/**/*.ts\" \"lib/**/*.ts\" \"*.ts\" \"types/**/*.d.ts\" \"extensions/**/*.ts\"",
+
     "test": "node --test test/*.test.mjs",
     "typecheck": "tsc --noEmit"
   },

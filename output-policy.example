@@ -1,0 +1,15 @@
+# Output policy for streamed agent responses.
+# This file is local configuration and is ignored by Git.
+# Values are decimal integers. Blank lines and comments are ignored.
+
+# Set to 0 to disable the hard character cap.
+maxChars=96000
+
+# Stop after this many consecutive identical substantial lines.
+maxRepeats=24
+
+# Lines shorter than this are excluded from repetition detection.
+minBlockChars=32
+
+# Require this many repeated characters before stopping.
+minRepeatedChars=1536
