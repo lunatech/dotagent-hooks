@@ -75,6 +75,11 @@ test("blocks Git operations that discard working-tree data", async () => {
   await assertBlocked("git switch --discard-changes main");
 });
 
+test("allows non-destructive branch switching", async () => {
+  await assertAllowed("git switch feature/test");
+  await assertAllowed("git switch --create feature/test");
+});
+
 test("accepts combined short commit options and enforces message structure", async () => {
   await assertAllowed("git commit -am 'feat: valid subject'");
   await assertAllowed("git commit -m 'fix: body' -m $'line one\\nline two' -m 'Refs: #42'");
