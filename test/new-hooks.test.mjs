@@ -100,6 +100,8 @@ test("guard-git-protected-branch blocks commits on main and allows feature branc
 
   const blocked = await assertGitCommitBlockedOn(main, "git commit -m 'feat: change'");
   assert.match(blocked.reason, /protected branch 'main'/);
+  assert.match(blocked.reason, /create or switch to a non-protected feature branch/);
+  assert.match(blocked.reason, /feature\/\<name\> or task\/\<name\>/);
   await assertAllowed(guardGitProtectedBranch, "bash", "git commit -m 'feat: change'", feature);
 });
 

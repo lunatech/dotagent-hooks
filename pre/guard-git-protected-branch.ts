@@ -99,6 +99,8 @@ function advisory(command: string, cwd: string, explanation: string): string {
     "Git commit prohibited by user policy.",
     `What it does: ${explanation}.`,
     `Working directory: ${cwd}`,
+    "Allowed branching: create or switch to a non-protected feature branch, such as feature/<name> or task/<name>, before committing.",
+    "Protected branches include main, master, default, and the repository's origin/HEAD default branch.",
     "Review the target branch and run the command personally if this direct commit is intended:",
     `  ${command}`,
   ].join("\n");
