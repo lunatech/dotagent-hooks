@@ -72,10 +72,12 @@ For the standard installation, the local file is `~/.agents/hooks/user-allowed-c
 
 ## Requirements
 
-- OMP 16.4.5 or newer
-- Node.js 22.18 or newer with `npm`
+- OMP 16.4.5 or newer;
+- Pi with package-extension support; CI currently validates `@mariozechner/pi-coding-agent` 0.73.1. The repository does not pin a minimum Pi release;
+- Node.js 22.18 or newer with `npm`;
+- Bun 1.4.4 or newer when running the Oh My Pi integration; this is the minimum required by the current Oh My Pi package and does not apply to Pi's Node-based integration.
 
-Check both versions before installing:
+Check the relevant runtime versions before installing:
 
 ```sh
 omp --version
