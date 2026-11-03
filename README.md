@@ -14,6 +14,7 @@ The hooks block these commands and shell behaviors by default:
 - package removal through `npm`, `pnpm`, `yarn`, `pip`, `pip3`, `brew`, `gem`, or `cargo`;
 - `find -delete`, `find -exec`, `find -execdir`, and `xargs`;
 - Git operations that publish, delete, or discard work: `push`, `clean`, `rm`, destructive `reset`, `restore`, `checkout`, forced `switch`, branch or tag deletion, and `stash drop` or `stash clear`;
+- direct Git commits on protected branches (`main`, `master`, `default`, or the repository's `origin/HEAD` default branch); the hook uses Tree-sitter to identify Git commands and Git commands to determine the current branch and repository selected by `git -C`;
 - shell output redirection, command or process substitution, malformed syntax, dynamic executable names, and dynamic policy-control arguments;
 - AWS CLI write/mutating operations: any `aws <service> <action>` where the action is not a read-only prefix (`describe`, `list`, `get`, `head`, `check`, `query`, `scan`, `search`, `validate`, `generate-presigned`, `help`, `wait`);
 - `curl` requests that mutate remote state: `-X POST/PUT/DELETE/PATCH`, `--request POST/PUT/DELETE/PATCH`, or any `--data`/`-d` flag;
@@ -71,10 +72,12 @@ For the standard installation, the local file is `~/.agents/hooks/user-allowed-c
 
 ## Requirements
 
-- OMP 16.4.5 or newer
-- Node.js 22.18 or newer with `npm`
+- OMP 16.4.5 or newer;
+- Pi with package-extension support; CI currently validates `@mariozechner/pi-coding-agent` 0.73.1. The repository does not pin a minimum Pi release;
+- Node.js 22.18 or newer with `npm`;
+- Bun 1.4.4 or newer when running the Oh My Pi integration; this is the minimum required by the current Oh My Pi package and does not apply to Pi's Node-based integration.
 
-Check both versions before installing:
+Check the relevant runtime versions before installing:
 
 ```sh
 omp --version
@@ -148,7 +151,6 @@ readlink ~/.pi/agent/extensions/dotagent-hooks
 ```
 
 Exit Pi and launch a new process after installation. Pi discovers extensions during process startup.
-
 
 ### How installation works
 

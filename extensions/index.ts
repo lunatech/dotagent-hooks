@@ -3,6 +3,7 @@ import commandSafetyHook from "../pre/command-safety.ts";
 import guardAwsWrite from "../pre/guard-aws-write.ts";
 import guardCurlWrite from "../pre/guard-curl-write.ts";
 import guardGcxWrite from "../pre/guard-gcx-write.ts";
+import guardGitProtectedBranch from "../pre/guard-git-protected-branch.ts";
 import guardGhPrDiscussion from "../pre/guard-gh-pr-discussion.ts";
 import guardKubectlWrite from "../pre/guard-kubectl-write.ts";
 import guardPkgInstall from "../pre/guard-pkg-install.ts";
@@ -13,6 +14,7 @@ const hookFactories = [
   guardAwsWrite,
   guardCurlWrite,
   guardGcxWrite,
+  guardGitProtectedBranch,
   guardGhPrDiscussion,
   guardKubectlWrite,
   guardPkgInstall,

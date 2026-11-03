@@ -22,6 +22,6 @@ jobs:
           -v "${{ github.workspace }}:/src:ro"
           -w /work
           -e HOME=/tmp/omp-home
-          oven/bun:1.3.14
+          oven/bun:1.4.4
           bash -lc
           'cp -a /src/. /work/ && bun install --no-save && mkdir -p /tmp/omp-home/.omp/agent && ln -s /work /tmp/omp-home/.omp/agent/hooks && bunx --bun @oh-my-pi/pi-coding-agent --help'
