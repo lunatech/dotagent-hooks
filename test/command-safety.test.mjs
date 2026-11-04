@@ -75,6 +75,12 @@ test("blocks Git operations that discard working-tree data", async () => {
   await assertBlocked("git switch --discard-changes main");
 });
 
+test("allows non-destructive Git synchronization", async () => {
+  await assertAllowed("git pull --ff-only origin main");
+  await assertAllowed("git pull --rebase origin main");
+  await assertAllowed("echo 'git pull'");
+});
+
 test("allows non-destructive branch switching", async () => {
   await assertAllowed("git switch feature/test");
   await assertAllowed("git switch --create feature/test");
