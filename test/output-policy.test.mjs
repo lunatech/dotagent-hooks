@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import outputPolicy from "../pre/output-policy.ts";
 import { DEFAULT_OUTPUT_POLICY, parseOutputPolicyConfig } from "../output-policy-config.ts";
@@ -78,6 +81,65 @@ test("blank or non-decimal maxChars cannot disable the cap", () => {
     assert.equal(parseOutputPolicyConfig(`maxChars=${value}\n`).maxChars, DEFAULT_OUTPUT_POLICY.maxChars);
   }
   assert.equal(parseOutputPolicyConfig("maxChars=0\n").maxChars, 0);
+});
+
+test("output-policy logs cumulative streamed characters at lifecycle events only under ~/.agent/hooks", () => {
+  const originalCwd = process.cwd();
+  const originalHome = process.env.HOME;
+  const home = mkdtempSync(join(tmpdir(), "output-policy-"));
+  const hooksDir = join(home, ".agent", "hooks");
+  mkdirSync(hooksDir, { recursive: true });
+  process.env.HOME = home;
+  process.chdir(hooksDir);
+  try {
+    const harness = mock();
+    outputPolicy(harness.pi, { ...DEFAULT_OUTPUT_POLICY, maxChars: 0 });
+    harness.fire("agent_start");
+    harness.fire("message_update", { assistantMessageEvent: { type: "text_delta", delta: "hello" } });
+    harness.fire("message_start");
+    harness.fire("message_update", { assistantMessageEvent: { type: "text_delta", delta: " world" } });
+    harness.fire("turn_start");
+    harness.fire("agent_end");
+
+    const entries = readFileSync(join(hooksDir, "output-policy.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    assert.deepEqual(entries.map(({ event, charsSincePreviousEvent, cumulativeChars }) => ({ event, charsSincePreviousEvent, cumulativeChars })), [
+      { event: "agent_start", charsSincePreviousEvent: 0, cumulativeChars: 0 },
+      { event: "message_start", charsSincePreviousEvent: 5, cumulativeChars: 5 },
+      { event: "turn_start", charsSincePreviousEvent: 6, cumulativeChars: 11 },
+      { event: "agent_end", charsSincePreviousEvent: 0, cumulativeChars: 11 },
+    ]);
+    assert.ok(entries.every((entry) => entry.cwd === hooksDir && Number.isFinite(Date.parse(entry.timestamp))));
+  } finally {
+    process.chdir(originalCwd);
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("output-policy does not log when the working directory is outside ~/.agent/hooks", () => {
+  const originalCwd = process.cwd();
+  const originalHome = process.env.HOME;
+  const home = mkdtempSync(join(tmpdir(), "output-policy-"));
+  const outside = join(home, "project");
+  mkdirSync(outside, { recursive: true });
+  process.env.HOME = home;
+  process.chdir(outside);
+  try {
+    const harness = mock();
+    outputPolicy(harness.pi, { ...DEFAULT_OUTPUT_POLICY, maxChars: 0 });
+    harness.fire("message_update", { assistantMessageEvent: { type: "text_delta", delta: "not logged" } });
+    harness.fire("agent_end");
+    assert.equal(existsSync(join(home, ".agent", "hooks", "output-policy.jsonl")), false);
+  } finally {
+    process.chdir(originalCwd);
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 test("output-policy has no tool-result handler", () => {
