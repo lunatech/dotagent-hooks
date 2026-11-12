@@ -488,6 +488,7 @@ async function evaluateCommandPolicyWithAllowedCommands(
       "ls-remote",
       "merge-base",
       "mv",
+      "pull",
       "name-rev",
       "reflog",
       "remote",
