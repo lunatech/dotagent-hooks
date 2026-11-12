@@ -477,6 +477,7 @@ async function evaluateCommandPolicyWithAllowedCommands(
       "check-attr",
       "check-ignore",
       "check-mailmap",
+      "clone",
       "diff",
       "describe",
       "fetch",

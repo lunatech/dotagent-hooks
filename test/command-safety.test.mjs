@@ -75,7 +75,8 @@ test("blocks Git operations that discard working-tree data", async () => {
   await assertBlocked("git switch --discard-changes main");
 });
 
-test("allows non-destructive Git synchronization", async () => {
+test("allows non-destructive Git synchronization and cloning", async () => {
+  await assertAllowed("git clone --depth 1 --filter=blob:none --sparse git@github.com:mattpocock/skills.git /tmp/mattpocock-skills-teach");
   await assertAllowed("git pull --ff-only origin main");
   await assertAllowed("git pull --rebase origin main");
   await assertAllowed("echo 'git pull'");
