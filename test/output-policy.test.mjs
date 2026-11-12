@@ -30,6 +30,7 @@ function mock(notify) {
           aborts += 1;
         },
         ui: { notify: notify ?? ((message, level) => notifications.push({ message, level })) },
+        sessionManager: { getSessionId: () => "session-1" },
       });
     },
   };
@@ -83,11 +84,11 @@ test("blank or non-decimal maxChars cannot disable the cap", () => {
   assert.equal(parseOutputPolicyConfig("maxChars=0\n").maxChars, 0);
 });
 
-test("output-policy logs cumulative streamed characters at lifecycle events only under ~/.agent/hooks", () => {
+test("output-policy groups lifecycle log records by session across multiple turns", () => {
   const originalCwd = process.cwd();
   const originalHome = process.env.HOME;
   const home = mkdtempSync(join(tmpdir(), "output-policy-"));
-  const hooksDir = join(home, ".agent", "hooks");
+  const hooksDir = join(home, ".agents", "hooks");
   mkdirSync(hooksDir, { recursive: true });
   process.env.HOME = home;
   process.chdir(hooksDir);
@@ -95,22 +96,28 @@ test("output-policy logs cumulative streamed characters at lifecycle events only
     const harness = mock();
     outputPolicy(harness.pi, { ...DEFAULT_OUTPUT_POLICY, maxChars: 0 });
     harness.fire("agent_start");
+    harness.fire("turn_start", { turnIndex: 0 });
     harness.fire("message_update", { assistantMessageEvent: { type: "text_delta", delta: "hello" } });
-    harness.fire("message_start");
+    harness.fire("message_start", { message: { role: "assistant" } });
     harness.fire("message_update", { assistantMessageEvent: { type: "text_delta", delta: " world" } });
-    harness.fire("turn_start");
+    harness.fire("turn_start", { turnIndex: 1 });
+    harness.fire("message_update", { assistantMessageEvent: { type: "text_delta", delta: " again" } });
     harness.fire("agent_end");
 
     const entries = readFileSync(join(hooksDir, "output-policy.jsonl"), "utf8")
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line));
-    assert.deepEqual(entries.map(({ event, charsSincePreviousEvent, cumulativeChars }) => ({ event, charsSincePreviousEvent, cumulativeChars })), [
-      { event: "agent_start", charsSincePreviousEvent: 0, cumulativeChars: 0 },
-      { event: "message_start", charsSincePreviousEvent: 5, cumulativeChars: 5 },
-      { event: "turn_start", charsSincePreviousEvent: 6, cumulativeChars: 11 },
-      { event: "agent_end", charsSincePreviousEvent: 0, cumulativeChars: 11 },
-    ]);
+    assert.deepEqual(
+      entries.map(({ event, messageId, sessionId, turnIndex, charsSincePreviousEvent, cumulativeChars }) => ({ event, messageId, sessionId, turnIndex, charsSincePreviousEvent, cumulativeChars })),
+      [
+        { event: "agent_start", messageId: null, sessionId: "session-1", turnIndex: null, charsSincePreviousEvent: 0, cumulativeChars: 0 },
+        { event: "turn_start", messageId: null, sessionId: "session-1", turnIndex: 0, charsSincePreviousEvent: 0, cumulativeChars: 0 },
+        { event: "message_start", messageId: null, sessionId: "session-1", turnIndex: 0, charsSincePreviousEvent: 5, cumulativeChars: 5 },
+        { event: "turn_start", messageId: null, sessionId: "session-1", turnIndex: 1, charsSincePreviousEvent: 6, cumulativeChars: 11 },
+        { event: "agent_end", messageId: null, sessionId: "session-1", turnIndex: 1, charsSincePreviousEvent: 6, cumulativeChars: 17 },
+      ],
+    );
     assert.ok(entries.every((entry) => entry.cwd === hooksDir && Number.isFinite(Date.parse(entry.timestamp))));
   } finally {
     process.chdir(originalCwd);
@@ -120,7 +127,7 @@ test("output-policy logs cumulative streamed characters at lifecycle events only
   }
 });
 
-test("output-policy does not log when the working directory is outside ~/.agent/hooks", () => {
+test("output-policy does not log when the working directory is outside ~/.agents/hooks", () => {
   const originalCwd = process.cwd();
   const originalHome = process.env.HOME;
   const home = mkdtempSync(join(tmpdir(), "output-policy-"));
@@ -133,7 +140,7 @@ test("output-policy does not log when the working directory is outside ~/.agent/
     outputPolicy(harness.pi, { ...DEFAULT_OUTPUT_POLICY, maxChars: 0 });
     harness.fire("message_update", { assistantMessageEvent: { type: "text_delta", delta: "not logged" } });
     harness.fire("agent_end");
-    assert.equal(existsSync(join(home, ".agent", "hooks", "output-policy.jsonl")), false);
+    assert.equal(existsSync(join(home, ".agents", "hooks", "output-policy.jsonl")), false);
   } finally {
     process.chdir(originalCwd);
     if (originalHome === undefined) delete process.env.HOME;

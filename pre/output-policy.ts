@@ -42,17 +42,23 @@ function isWithin(directory: string, candidate: string): boolean {
 
 export default function outputPolicy(pi: HookAPI, config: OutputPolicyConfig = readOutputPolicyConfig()): void {
   let state = fresh();
-  const logDirectory = resolve(homedir(), ".agent/hooks");
+  const logDirectory = resolve(homedir(), ".agents/hooks");
   const workingDirectory = resolve(process.cwd());
   const shouldLog = isWithin(logDirectory, workingDirectory);
   let loggedChars = 0;
   let sessionChars = 0;
+  let messageId: string | null = null;
+  let sessionId: string | null = null;
+  let turnIndex: number | null = null;
   const logBoundary = (event: string) => {
     if (!shouldLog) return;
     const entry = {
       timestamp: new Date().toISOString(),
       event,
       cwd: workingDirectory,
+      messageId,
+      sessionId,
+      turnIndex,
       charsSincePreviousEvent: sessionChars - loggedChars,
       cumulativeChars: sessionChars,
     };
@@ -64,7 +70,20 @@ export default function outputPolicy(pi: HookAPI, config: OutputPolicyConfig = r
       // Debug logging must not interrupt output policy enforcement.
     }
   };
-  const reset = (event: string) => {
+  const reset = (
+    event: string,
+    payload?: { turnIndex?: number; message?: { id?: string } },
+    context?: { sessionManager?: { getSessionId?: () => string } },
+  ) => {
+    if (event === "agent_start") {
+      messageId = null;
+      sessionId = null;
+      turnIndex = null;
+    }
+    const activeSessionId = context?.sessionManager?.getSessionId?.();
+    if (typeof activeSessionId === "string") sessionId = activeSessionId;
+    if (typeof payload?.message?.id === "string") messageId = payload.message.id;
+    if (typeof payload?.turnIndex === "number") turnIndex = payload.turnIndex;
     logBoundary(event);
     state = fresh();
     if (event === "agent_start" || event === "agent_end") {
@@ -72,10 +91,10 @@ export default function outputPolicy(pi: HookAPI, config: OutputPolicyConfig = r
       loggedChars = 0;
     }
   };
-  pi.on("message_start", () => reset("message_start"));
-  pi.on("turn_start", () => reset("turn_start"));
-  pi.on("agent_start", () => reset("agent_start"));
-  pi.on("agent_end", () => reset("agent_end"));
+  pi.on("message_start", (event, context) => reset("message_start", event, context));
+  pi.on("turn_start", (event, context) => reset("turn_start", event, context));
+  pi.on("agent_start", (event, context) => reset("agent_start", event, context));
+  pi.on("agent_end", (event, context) => reset("agent_end", event, context));
   pi.on("message_update", (event, ctx) => {
     if (state.aborted) return;
     const delta = deltaOf(event);

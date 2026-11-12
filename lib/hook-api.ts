@@ -46,8 +46,20 @@ export interface CommandOptions {
   handler: (args: string | string[], ctx: CommandContext) => Promise<void> | void;
 }
 
+export interface LifecycleEvent {
+  turnIndex?: number;
+  message?: { id?: string };
+}
+
+export interface LifecycleContext {
+  sessionManager?: { getSessionId?: () => string };
+}
+
 export interface HookAPI {
-  on(event: "message_start" | "turn_start" | "agent_start" | "agent_end", handler: () => void): void;
+  on(
+    event: "message_start" | "turn_start" | "agent_start" | "agent_end",
+    handler: (event?: LifecycleEvent, context?: LifecycleContext) => void,
+  ): void;
   on(event: "message_update", handler: (event: MessageUpdateEvent, ctx: MessageUpdateContext) => void): void;
   on(event: "tool_call", handler: (event: ToolCallEvent) => Promise<ToolCallResult> | ToolCallResult): void;
   on(event: "tool_result", handler: (event: ToolResultEvent) => Promise<ToolResultReturn> | ToolResultReturn): void;

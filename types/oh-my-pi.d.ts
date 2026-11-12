@@ -47,10 +47,22 @@ declare module "@oh-my-pi/pi-coding-agent/extensibility/hooks" {
     handler: (args: string | string[], ctx: CommandContext) => Promise<void> | void;
   }
 
+  interface LifecycleEvent {
+    turnIndex?: number;
+    message?: { id?: string };
+  }
+
+  interface LifecycleContext {
+    sessionManager?: { getSessionId?: () => string };
+  }
+
   export interface HookAPI {
     on(event: "tool_call", handler: (event: ToolCallEvent) => Promise<ToolCallResult> | ToolCallResult): void;
     on(event: "tool_result", handler: (event: ToolResultEvent) => ToolResultReturn): void;
-    on(event: "message_start" | "turn_start" | "agent_start" | "agent_end", handler: () => void): void;
+    on(
+      event: "message_start" | "turn_start" | "agent_start" | "agent_end",
+      handler: (event?: LifecycleEvent, context?: LifecycleContext) => void,
+    ): void;
     on(event: "message_update", handler: (event: MessageUpdateEvent, ctx: MessageUpdateContext) => void): void;
     registerCommand(name: string, options: CommandOptions): void;
   }
