@@ -75,8 +75,14 @@ test("blocks Git operations that discard working-tree data", async () => {
   await assertBlocked("git switch --discard-changes main");
 });
 
-test("allows non-destructive Git synchronization and cloning", async () => {
+test("allows non-destructive Git synchronization, cloning, and explicit sparse-checkout sets", async () => {
   await assertAllowed("git clone --depth 1 --filter=blob:none --sparse git@github.com:mattpocock/skills.git /tmp/mattpocock-skills-teach");
+  await assertAllowed("git -C /tmp/mattpocock-skills-teach sparse-checkout set skills/productivity/teach/agents");
+  await assertAllowed("git sparse-checkout set --cone --sparse-index skills/productivity/teach/agents");
+  await assertBlocked("git sparse-checkout disable");
+  await assertBlocked("git sparse-checkout set $PATTERN");
+  await assertBlocked("git sparse-checkout set ../outside");
+  await assertAllowed("echo 'git sparse-checkout set'");
   await assertAllowed("git pull --ff-only origin main");
   await assertAllowed("git pull --rebase origin main");
   await assertAllowed("echo 'git pull'");
