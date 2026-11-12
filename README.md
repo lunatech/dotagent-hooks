@@ -13,9 +13,8 @@ The hooks block these commands and shell behaviors by default:
 - resource deletion: `terraform destroy`, `kubectl delete`, Docker `rm`, `rmi`, and prune operations;
 - package removal through `npm`, `pnpm`, `yarn`, `pip`, `pip3`, `brew`, `gem`, or `cargo`;
 - `find -delete`, `find -exec`, `find -execdir`, and `xargs`;
-- Git operations that publish, delete, or discard work: `push`, `clean`, `rm`, destructive `reset`, `restore`, `checkout`, forced `switch`, branch or tag deletion, and `stash drop` or `stash clear`;
-
-Non-destructive Git synchronization, including `git fetch` and `git pull`, remains allowed.
+- Git operations that publish, delete, or discard work: `push`, `clean`, `rm`, destructive `reset`, `restore`, `checkout`, forced `switch`, branch or tag deletion, and `stash drop` or `stash clear`; `git sparse-checkout` operations are blocked except for `set` with explicit static relative patterns and recognized safe flags;
+- Non-destructive Git synchronization, including `git fetch` and `git pull`, remains allowed.
 - direct Git commits on protected branches (`main`, `master`, `default`, or the repository's `origin/HEAD` default branch); the hook uses Tree-sitter to identify Git commands and Git commands to determine the current branch and repository selected by `git -C`;
 - shell output redirection, command or process substitution, malformed syntax, dynamic executable names, and dynamic policy-control arguments;
 - AWS CLI write/mutating operations: any `aws <service> <action>` where the action is not a read-only prefix (`describe`, `list`, `get`, `head`, `check`, `query`, `scan`, `search`, `validate`, `generate-presigned`, `help`, `wait`);
@@ -44,7 +43,7 @@ minBlockChars=32
 minRepeatedChars=1536
 ```
 
-Set `maxChars=0` to disable only the character cap. Settings must be non-negative decimal integers; invalid or blank values retain their defaults. The hook reads the file when either agent starts; restart the agent after changing it. The hook does not save or rewrite the partial response.
+Set `maxChars=0` to disable only the character cap. Settings must be non-negative decimal integers; invalid or blank values retain their defaults. The hook reads the file when either agent starts; restart the agent after changing it. The hook does not save or rewrite the partial response. For debugging, it appends JSONL records to `~/.agents/hooks/output-policy.jsonl` only when the session working directory is inside `~/.agents/hooks`. Records are written at `message_start`, `turn_start`, `agent_start`, and `agent_end` boundaries and include the event, timestamp, working directory, `sessionId`, and `turnIndex` (the latter two form a turn key); `messageId` is `null` because the runtime does not expose a unique message ID. Records also include characters since the previous boundary, and cumulative streamed assistant-text characters for that agent run. The cumulative count lets you calculate the total even when multiple messages occur in one run; reasoning and tool output are excluded. Logging errors do not affect output policy enforcement.
 
 When a Python command fails with a `ModuleNotFoundError` or `ImportError`, the `guard-pkg-install` hook appends `uv`/`uvx` guidance to the output without blocking the result.
 

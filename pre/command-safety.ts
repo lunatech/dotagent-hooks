@@ -244,6 +244,33 @@ async function readUserAllowedCommands(path: string | URL): Promise<ReadonlySet<
   }
 }
 
+function sparseCheckoutSetIsAllowed(args: ShellWord[]): boolean {
+  if (args[0]?.dynamic || args[0]?.text !== "set") return false;
+  let afterTerminator = false;
+  let hasPattern = false;
+  for (const word of args.slice(1)) {
+    if (word.dynamic) return false;
+    const value = word.text;
+    if (!afterTerminator && value === "--") {
+      afterTerminator = true;
+      continue;
+    }
+    if (!afterTerminator && ["--cone", "--sparse-index", "--no-sparse-index"].includes(value)) continue;
+    if (!afterTerminator && value.startsWith("-")) return false;
+    if (
+      value.startsWith("/") ||
+      value === "." ||
+      value === ".." ||
+      value.startsWith("../") ||
+      value.includes("/../") ||
+      value.endsWith("/..")
+    )
+      return false;
+    hasPattern = true;
+  }
+  return hasPattern;
+}
+
 function destructiveGitExplanation(git: GitCommand): string | null {
   const args = git.args.map((word) => word.text);
   if (git.name === "push") return "publishes local refs and objects to a remote Git repository";
@@ -466,6 +493,15 @@ async function evaluateCommandPolicyWithAllowedCommands(
 
     const git = gitSubcommand(words);
     if (git.error) return { kind: "destructive", reason: destructiveAdvisory(command, cwd, git.error) };
+    if (git.name === "sparse-checkout" && !sparseCheckoutSetIsAllowed(git.args))
+      return {
+        kind: "destructive",
+        reason: destructiveAdvisory(
+          command,
+          cwd,
+          "uses a sparse-checkout operation other than a verifiable set with explicit relative patterns, which can change working-tree contents",
+        ),
+      };
     const gitExplanation = destructiveGitExplanation(git);
     if (gitExplanation) return { kind: "destructive", reason: destructiveAdvisory(command, cwd, gitExplanation) };
     const knownGitCommands = new Set([
@@ -477,6 +513,7 @@ async function evaluateCommandPolicyWithAllowedCommands(
       "check-attr",
       "check-ignore",
       "check-mailmap",
+      "clone",
       "diff",
       "describe",
       "fetch",
@@ -496,6 +533,7 @@ async function evaluateCommandPolicyWithAllowedCommands(
       "rev-list",
       "show",
       "shortlog",
+      "sparse-checkout",
       "status",
       "switch",
       "submodule",
