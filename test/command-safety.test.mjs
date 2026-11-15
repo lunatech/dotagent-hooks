@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -54,6 +54,22 @@ test("allows configured commands only for the non-sudo user", async (context) =>
   await writeFile(allowedCommandsPath, "killall\n");
   await assertBlocked("pkill -f worker", "destructive", allowedCommandsPath);
   await assertAllowed("killall worker", allowedCommandsPath);
+});
+
+test("merges directory-specific allowed commands with the top-level file", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "dotagent-hooks-cwd-"));
+  const topLevelPath = join(directory, "top-level-user-allowed-commands");
+  const localPath = join(directory, "user-allowed-commands");
+  const elsewhere = join(directory, "elsewhere");
+  await mkdir(elsewhere);
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  await writeFile(topLevelPath, "pkill\n");
+  await writeFile(localPath, "killall\n");
+
+  assert.equal(await evaluateCommandPolicy("pkill worker", directory, topLevelPath), null);
+  assert.equal(await evaluateCommandPolicy("killall worker", directory, topLevelPath), null);
+  assert.equal((await evaluateCommandPolicy("killall worker", elsewhere, topLevelPath))?.kind, "destructive");
+  assert.equal(await evaluateCommandPolicy("echo 'killall worker'", directory, topLevelPath), null);
 });
 
 test("inspects nested shell commands after option terminators", async () => {

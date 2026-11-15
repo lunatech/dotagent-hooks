@@ -66,9 +66,9 @@ The example lists every configurable executable with each entry commented out. R
 pkill
 ```
 
-Put one executable name on each enabled line. Blank lines and lines beginning with `#` are ignored. Entries match the executable name, so `pkill` also permits `/usr/bin/pkill`. Do not include arguments. The hook reads the local file for every command, so edits apply immediately.
+Put one executable name on each enabled line. Blank lines and lines beginning with `#` are ignored. Entries match the executable name, so `pkill` also permits `/usr/bin/pkill`. Do not include arguments. The hook reads the files for every command, so edits apply immediately. In addition to this top-level file, you can place a `user-allowed-commands` file in a working directory to allow executables only there. Its entries are merged with the top-level list; it does not replace it. For example, a project directory can opt into `killall` without enabling it in every working directory.
 
-The file cannot permit `sudo`, destructive Git operations, output redirection, command or process substitution, malformed or dynamic syntax, `xargs`, or `find -exec`/`-execdir`. For example, listing `pkill` permits `pkill -f worker` but `sudo pkill -f worker` remains blocked.
+The files cannot permit `sudo`, destructive Git operations, output redirection, command or process substitution, malformed or dynamic syntax, `xargs`, or `find -exec`/`-execdir`. For example, listing `pkill` permits `pkill -f worker` but `sudo pkill -f worker` remains blocked.
 
 For the standard installation, the local file is `~/.agents/hooks/user-allowed-commands`. Named OMP profiles linked to the same checkout share it.
 

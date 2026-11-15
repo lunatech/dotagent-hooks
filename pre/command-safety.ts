@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import type { HookAPI } from "../lib/hook-api.ts";
 import { parseShellAst, type ShellWord } from "../lib/shell-ast.ts";
 
@@ -230,7 +231,7 @@ function isUserAllowableDestructiveCommand(command: ShellWord[]): boolean {
   return executable === "find" && args.includes("-delete") && !args.some((argument) => argument === "-exec" || argument === "-execdir");
 }
 
-async function readUserAllowedCommands(path: string | URL): Promise<ReadonlySet<string>> {
+async function readUserAllowedCommandsFile(path: string | URL): Promise<Set<string>> {
   try {
     const contents = await readFile(path, "utf8");
     return new Set(
@@ -242,6 +243,14 @@ async function readUserAllowedCommands(path: string | URL): Promise<ReadonlySet<
   } catch {
     return new Set();
   }
+}
+
+async function readUserAllowedCommands(path: string | URL, cwd: string): Promise<ReadonlySet<string>> {
+  const [topLevel, directorySpecific] = await Promise.all([
+    readUserAllowedCommandsFile(path),
+    readUserAllowedCommandsFile(resolve(cwd, "user-allowed-commands")),
+  ]);
+  return new Set([...topLevel, ...directorySpecific]);
 }
 
 function destructiveGitExplanation(git: GitCommand): string | null {
@@ -526,7 +535,7 @@ export async function evaluateCommandPolicy(
   cwd = ".",
   allowedCommandsPath: string | URL = USER_ALLOWED_COMMANDS_PATH,
 ): Promise<PolicyDecision | null> {
-  const allowedCommands = await readUserAllowedCommands(allowedCommandsPath);
+  const allowedCommands = await readUserAllowedCommands(allowedCommandsPath, cwd);
   return evaluateCommandPolicyWithAllowedCommands(command, cwd, allowedCommands);
 }
 
